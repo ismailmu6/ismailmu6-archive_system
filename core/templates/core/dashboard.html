@@ -1,0 +1,63 @@
+{% extends 'core/base.html' %}
+{% block title %}لوحة التحكم{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2 class="section-title"><i class="fas fa-chart-bar"></i> لوحة التحكم</h2>
+
+    <div class="stat-cards">
+        <div class="stat-card">
+            <div class="num">{{ total_documents }}</div>
+            <div class="label">إجمالي الوثائق</div>
+        </div>
+        <div class="stat-card">
+            <div class="num">{{ internal_count }}</div>
+            <div class="label">داخلي</div>
+        </div>
+        <div class="stat-card">
+            <div class="num">{{ external_count }}</div>
+            <div class="label">خارجي</div>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <a href="{% url 'upload' %}" class="btn btn-primary">
+            <i class="fas fa-upload"></i> رفع وثيقة جديدة
+        </a>
+        <a href="{% url 'folder_list' %}" class="btn btn-secondary">
+            <i class="fas fa-folder-open"></i> تصفح المجلدات
+        </a>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>رقم الوثيقة</th>
+                <th>الاسم</th>
+                <th>الدائرة</th>
+                <th>التاريخ</th>
+                <th>رفعها</th>
+                <th>إجراء</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for doc in recent_documents %}
+            <tr>
+                <td>{{ doc.full_number }}</td>
+                <td>{{ doc.title }}</td>
+                <td>{{ doc.department.name }}</td>
+                <td>{{ doc.document_date }}</td>
+                <td>{{ doc.uploaded_by }}</td>
+                <td>
+                    <a href="{% url 'document_detail' doc.id %}" class="btn btn-primary">عرض</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6">لا توجد وثائق بعد</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

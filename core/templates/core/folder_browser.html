@@ -1,0 +1,57 @@
+{% extends 'core/base.html' %}
+{% block title %}{% if current_folder %}{{ current_folder.name }}{% else %}الأرشيف{% endif %} - نظام الأرشفة{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+    <a href="{% url 'folder_list' %}">الأرشيف</a>
+    {% if current_folder %} / {{ current_folder.name }}{% endif %}
+</div>
+
+<div class="toolbar">
+    {% if current_folder %}
+        <a href="{% url 'create_folder' %}?parent_id={{ current_folder.id }}" class="btn btn-secondary">
+            <i class="fas fa-folder-plus"></i> مجلد فرعي جديد
+        </a>
+        <a href="{% url 'upload' %}?folder_id={{ current_folder.id }}" class="btn btn-primary">
+            <i class="fas fa-upload"></i> رفع وثيقة هنا
+        </a>
+    {% else %}
+        <a href="{% url 'create_folder' %}" class="btn btn-secondary">
+            <i class="fas fa-folder-plus"></i> مجلد جديد
+        </a>
+        <a href="{% url 'upload' %}" class="btn btn-primary">
+            <i class="fas fa-upload"></i> رفع وثيقة
+        </a>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h4 class="section-title"><i class="fas fa-folder"></i> المجلدات</h4>
+    <div class="grid">
+        {% for f in folders %}
+        <a href="{% url 'folder_detail' f.id %}" class="item">
+            <span class="icon"><i class="fas fa-folder"></i></span>
+            <span class="name">{{ f.name }}</span>
+            <span class="meta">{{ f.created_by }}</span>
+        </a>
+        {% empty %}
+        <div class="empty">لا توجد مجلدات</div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="card">
+    <h4 class="section-title"><i class="fas fa-file"></i> الوثائق {% if current_folder %}هنا{% endif %}</h4>
+    <div class="grid">
+        {% for doc in documents %}
+        <a href="{% url 'document_detail' doc.id %}" class="item">
+            <span class="icon"><i class="fas fa-file-alt"></i></span>
+            <span class="name">{{ doc.title }}</span>
+            <span class="meta">{{ doc.full_number }}</span>
+        </a>
+        {% empty %}
+        <div class="empty">لا توجد وثائق</div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

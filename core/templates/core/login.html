@@ -1,0 +1,27 @@
+{% extends 'core/base.html' %}
+{% load static %}
+{% block title %}تسجيل الدخول{% endblock %}
+
+{% block body %}
+<div class="auth-page">
+    <div class="auth-box">
+        <img src="{% static 'core/images/Syrian_logo_icon_gold.png' %}" alt="شعار الجمهورية العربية السورية">
+        <h2>وزارة المالية<br><small style="font-size:12px; color:#988561;">نظام الأرشفة الإلكترونية</small></h2>
+
+        {% if messages %}
+            {% for message in messages %}<div class="msg msg-error">{{ message }}</div>{% endfor %}
+        {% endif %}
+
+        <form method="post">
+            {% csrf_token %}
+            <label>اسم المستخدم</label>
+            <input type="text" name="username" required autofocus>
+
+            <label>كلمة المرور</label>
+            <input type="password" name="password" required>
+
+            <button type="submit" class="btn btn-primary btn-block">تسجيل الدخول</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

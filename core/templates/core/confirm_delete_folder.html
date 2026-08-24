@@ -1,0 +1,30 @@
+{% extends 'core/base.html' %}
+{% block title %}تأكيد حذف المجلد - نظام الأرشفة{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 500px; margin: 0 auto; text-align: center;">
+    <h2 class="section-title" style="justify-content: center;">
+        <i class="fas fa-exclamation-triangle" style="color: var(--umber);"></i> تأكيد حذف المجلد
+    </h2>
+
+    <p>هل أنت متأكد من حذف المجلد <strong>{{ folder.name }}</strong>؟</p>
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="actions" style="justify-content: center; margin-top: 20px;">
+            {% if folder.parent %}
+            <a href="{% url 'folder_detail' folder.parent.id %}" class="btn btn-secondary">
+                <i class="fas fa-times"></i> إلغاء
+            </a>
+            {% else %}
+            <a href="{% url 'folder_list' %}" class="btn btn-secondary">
+                <i class="fas fa-times"></i> إلغاء
+            </a>
+            {% endif %}
+            <button type="submit" class="btn btn-danger">
+                <i class="fas fa-trash-alt"></i> تأكيد الحذف
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

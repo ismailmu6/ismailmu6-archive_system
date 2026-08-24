@@ -1,0 +1,94 @@
+{% extends 'core/base.html' %}
+{% block title %}{{ document.title }} - نظام الأرشفة{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2 class="section-title">{{ document.title }}</h2>
+
+    <div class="detail-row">
+        <div class="detail-key">رقم الوثيقة</div>
+        <div class="detail-value">{{ document.full_number }}</div>
+    </div>
+    <div class="detail-row">
+        <div class="detail-key">التاريخ</div>
+        <div class="detail-value">{{ document.document_date }}</div>
+    </div>
+    <div class="detail-row">
+        <div class="detail-key">المديرية</div>
+        <div class="detail-value">{{ document.directorate.name }}</div>
+    </div>
+    <div class="detail-row">
+        <div class="detail-key">الدائرة</div>
+        <div class="detail-value">{{ document.department.name }}</div>
+    </div>
+    {% if document.folder %}
+    <div class="detail-row">
+        <div class="detail-key">المجلد</div>
+        <div class="detail-value"><i class="fas fa-folder"></i> <a href="{% url 'folder_detail' document.folder.id %}">{{ document.folder.name }}</a></div>
+    </div>
+    {% endif %}
+    <div class="detail-row">
+        <div class="detail-key">المصدر</div>
+        <div class="detail-value">
+            <span class="badge {% if document.source == 'internal' %}badge-internal{% else %}badge-external{% endif %}">
+                {{ document.get_source_display }}
+            </span>
+        </div>
+    </div>
+    {% if document.source == 'internal' and document.issuing_directorate %}
+    <div class="detail-row">
+        <div class="detail-key">المديرية الصادرة عنها</div>
+        <div class="detail-value">{{ document.issuing_directorate.name }}</div>
+    </div>
+    {% elif document.source == 'external' and document.external_entity_name %}
+    <div class="detail-row">
+        <div class="detail-key">الجهة الخارجية</div>
+        <div class="detail-value">{{ document.external_entity_name }}</div>
+    </div>
+    {% endif %}
+    <div class="detail-row">
+        <div class="detail-key">الوسوم</div>
+        <div class="detail-value">
+            {% for tag in document.tags.all %}
+                <span class="badge badge-tag">{{ tag.name }}</span>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="detail-row">
+        <div class="detail-key">رفعها</div>
+        <div class="detail-value">{{ document.uploaded_by }}</div>
+    </div>
+
+    <div class="actions">
+        <a href="{% url 'download_document' document.id %}" class="btn btn-primary">
+            <i class="fas fa-download"></i> تحميل الملف
+        </a>
+        {% if can_manage %}
+        <a href="{% url 'delete_document' document.id %}" class="btn btn-danger">
+            <i class="fas fa-trash-alt"></i> حذف
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <h3 class="section-title"><i class="fas fa-comments"></i> التعليقات</h3>
+    {% for c in comments %}
+    <div class="comment-item">
+        <div class="comment-meta">{{ c.created_by }} — {{ c.created_at }}</div>
+        <div>{{ c.text }}</div>
+    </div>
+    {% empty %}
+    <div>لا توجد تعليقات بعد</div>
+    {% endfor %}
+
+    <form method="post" action="{% url 'add_comment' document.id %}" class="comment-form">
+        {% csrf_token %}
+        <label for="comment-text">أضف تعليقاً</label>
+        <textarea id="comment-text" name="text" rows="3" required></textarea>
+        <button type="submit" class="btn btn-primary">
+            <i class="fas fa-plus-circle"></i> إضافة تعليق
+        </button>
+    </form>
+</div>
+{% endblock %}

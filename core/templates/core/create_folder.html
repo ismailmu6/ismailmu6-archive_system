@@ -1,0 +1,38 @@
+{% extends 'core/base.html' %}
+{% block title %}مجلد جديد - نظام الأرشفة{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 500px; margin: 0 auto;">
+    <h2 class="section-title"><i class="fas fa-folder-plus"></i> إنشاء مجلد جديد</h2>
+
+    {% if parent %}
+    <div class="msg msg-info">
+        <i class="fas fa-info-circle"></i>
+        سيُنشأ داخل المجلد: <strong>{{ parent.name }}</strong>
+    </div>
+    {% endif %}
+
+    <form method="post">
+        {% csrf_token %}
+        {% if parent %}<input type="hidden" name="parent_id" value="{{ parent.id }}">{% endif %}
+
+        <label for="folder-name">اسم المجلد</label>
+        <input type="text" id="folder-name" name="name" required autofocus>
+
+        <div class="actions">
+            {% if parent %}
+            <a href="{% url 'folder_detail' parent.id %}" class="btn btn-secondary">
+                <i class="fas fa-times"></i> إلغاء
+            </a>
+            {% else %}
+            <a href="{% url 'folder_list' %}" class="btn btn-secondary">
+                <i class="fas fa-times"></i> إلغاء
+            </a>
+            {% endif %}
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-check"></i> إنشاء
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

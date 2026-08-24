@@ -1,0 +1,61 @@
+{% extends 'core/base.html' %}
+{% load static %}
+{% block title %}رفع وثيقة{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 550px; margin: 0 auto;">
+    <h2 class="section-title">رفع وثيقة جديدة</h2>
+
+    <div class="msg msg-info">
+        المديرية: {{ request.user.directorate.name }} — الدائرة: {{ request.user.department.name }}
+        {% if folder %} — المجلد: {{ folder.name }}{% endif %}
+    </div>
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        {% if folder %}<input type="hidden" name="folder_id" value="{{ folder.id }}">{% endif %}
+
+        <label for="id_file">الملف</label>
+        <input type="file" id="id_file" name="file" required>
+
+        <label for="id_document_number">رقم الوثيقة</label>
+        <input type="text" id="id_document_number" name="document_number" required>
+
+        <label for="id_title">اسم الوثيقة</label>
+        <input type="text" id="id_title" name="title" required>
+
+        <label for="id_document_date">التاريخ</label>
+        <input type="date" id="id_document_date" name="document_date" required>
+
+        <label for="id_tags">الوسوم (افصل بينها بفاصلة)</label>
+        <input type="text" id="id_tags" name="tags" placeholder="مثال: مالية, 2026, عاجل">
+
+        <label for="id_source">المصدر</label>
+        <select id="id_source" name="source" data-source-toggle required>
+            <option value="internal">داخلي</option>
+            <option value="external">خارجي</option>
+        </select>
+
+        <div data-source-panel="internal">
+            <label for="id_issuing_directorate">المديرية الصادرة عنها</label>
+            <select id="id_issuing_directorate" name="issuing_directorate">
+                <option value="">اختر المديرية</option>
+                {% for d in directorates %}
+                <option value="{{ d.id }}">{{ d.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div data-source-panel="external">
+            <label for="id_external_entity">اسم الجهة الخارجية</label>
+            <input type="text" id="id_external_entity" name="external_entity_name" placeholder="مثال: وزارة الداخلية، شركة كذا...">
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">رفع الوثيقة</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'core/js/source_field_toggle.js' %}"></script>
+{% endblock %}

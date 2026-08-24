@@ -1,0 +1,28 @@
+{% extends 'core/base.html' %}
+{% block title %}تأكيد الحذف - نظام الأرشفة{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 500px; margin: 0 auto; text-align: center;">
+    <h2 class="section-title" style="justify-content: center;">
+        <i class="fas fa-exclamation-triangle" style="color: var(--umber);"></i> تأكيد حذف الوثيقة
+    </h2>
+
+    <p>
+        هل أنت متأكد من حذف الوثيقة رقم
+        <strong>{{ document.full_number }}</strong> - {{ document.title }}؟
+    </p>
+    <p style="color: var(--charcoal-light);">سيتم تسجيل هذا الإجراء بسجل التدقيق.</p>
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="actions" style="justify-content: center; margin-top: 20px;">
+            <a href="{% url 'document_detail' document.id %}" class="btn btn-secondary">
+                <i class="fas fa-times"></i> إلغاء
+            </a>
+            <button type="submit" class="btn btn-danger">
+                <i class="fas fa-trash-alt"></i> تأكيد الحذف
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

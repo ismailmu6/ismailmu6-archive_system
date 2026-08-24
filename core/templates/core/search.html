@@ -1,0 +1,152 @@
+{% extends 'core/base.html' %}
+{% load static %}
+{% block title %}البحث - نظام الأرشفة{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2 class="section-title"><i class="fas fa-search"></i> البحث في الوثائق</h2>
+
+    <form method="get" class="search-form">
+        <div class="field">
+            <label for="id_document_number">رقم الوثيقة</label>
+            <input type="text" id="id_document_number" name="document_number" value="{{ search_params.document_number }}" placeholder="أدخل رقم الوثيقة">
+        </div>
+
+        <div class="field">
+            <label for="id_name">اسم الوثيقة</label>
+            <input type="text" id="id_name" name="name" value="{{ search_params.name }}">
+        </div>
+
+        <div class="field">
+            <label for="id_date_from">من تاريخ</label>
+            <input type="date" id="id_date_from" name="date_from" value="{{ search_params.date_from }}">
+        </div>
+
+        <div class="field">
+            <label for="id_date_to">إلى تاريخ</label>
+            <input type="date" id="id_date_to" name="date_to" value="{{ search_params.date_to }}">
+        </div>
+
+        <div class="field">
+            <label for="id_keyword">كلمة مفتاحية / وسم</label>
+            <input type="text" id="id_keyword" name="keyword" value="{{ search_params.keyword }}" placeholder="وسم أو كلمة مفتاحية">
+        </div>
+
+        <div class="field">
+            <label for="id_source">المصدر</label>
+            <select id="id_source" name="source" data-source-toggle>
+                <option value="">الكل</option>
+                <option value="internal" {% if search_params.source == 'internal' %}selected{% endif %}>داخلي</option>
+                <option value="external" {% if search_params.source == 'external' %}selected{% endif %}>خارجي</option>
+            </select>
+        </div>
+
+        <div class="field" data-source-panel="internal">
+            <label for="id_issuing_directorate">المديرية الصادرة عنها</label>
+            <select id="id_issuing_directorate" name="issuing_directorate">
+                <option value="">الكل</option>
+                {% for d in directorates %}
+                <option value="{{ d.id }}" {% if search_params.issuing_directorate == d.id|stringformat:"s" %}selected{% endif %}>{{ d.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="field" data-source-panel="external">
+            <label for="id_external_entity">اسم الجهة الخارجية</label>
+            <input type="text" id="id_external_entity" name="external_entity_name" value="{{ search_params.external_entity_name }}" placeholder="ابحث باسم الجهة">
+        </div>
+
+        <div class="field-submit">
+            <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> بحث</button>
+        </div>
+    </form>
+</div>
+
+<table>
+    <thead>
+        <tr>
+            <th>رقم الوثيقة</th>
+            <th>الاسم</th>
+            <th>الدائرة</th>
+            <th>التاريخ</th>
+            <th>المصدر</th>
+            <th>الجهة الصادرة</th>
+            <th>إجراء</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for doc in documents %}
+        <tr>
+            <td>{{ doc.full_number }}</td>
+            <td>{{ doc.title }}</td>
+            <td>{{ doc.department.name }}</td>
+            <td>{{ doc.document_date }}</td>
+            <td>
+                {% if doc.source == 'internal' %}
+                    <span class="badge badge-internal">داخلي</span>
+                {% else %}
+                    <span class="badge badge-external">خارجي</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if doc.source == 'internal' %}{{ doc.issuing_directorate.name|default:"—" }}
+                {% else %}{{ doc.external_entity_name|default:"—" }}{% endif %}
+            </td>
+            <td>
+                <a href="{% url 'document_detail' doc.id %}" class="btn btn-primary">عرض</a>
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="7">لا توجد نتائج</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'core/js/source_field_toggle.js' %}"></script>
+{% endblock %}@login_required
+def search_documents(request):
+    documents = get_visible_documents(request.user)
+
+    document_number = request.GET.get('document_number', '').strip()   # ✅ السطر المضاف
+    name = request.GET.get('name', '').strip()
+    date_from = request.GET.get('date_from', '').strip()
+    date_to = request.GET.get('date_to', '').strip()
+    keyword = request.GET.get('keyword', '').strip()
+    source = request.GET.get('source', '').strip()
+    issuing_directorate_id = request.GET.get('issuing_directorate', '').strip()
+    external_entity_name = request.GET.get('external_entity_name', '').strip()
+
+    if document_number:   # ✅ الفلتر المضاف
+        documents = documents.filter(document_number__icontains=document_number)
+
+    if name:
+        documents = documents.filter(title__icontains=name)
+
+    if date_from:
+        documents = documents.filter(document_date__gte=date_from)
+    if date_to:
+        documents = documents.filter(document_date__lte=date_to)
+
+    if keyword:
+        documents = documents.filter(
+            Q(tags__name__icontains=keyword) | Q(document_number__icontains=keyword)
+        ).distinct()
+
+    if source in Document.Source.values:
+        documents = documents.filter(source=source)
+
+    if source == Document.Source.INTERNAL and issuing_directorate_id:
+        documents = documents.filter(issuing_directorate_id=issuing_directorate_id)
+    elif source == Document.Source.EXTERNAL and external_entity_name:
+        documents = documents.filter(external_entity_name__icontains=external_entity_name)
+
+    context = {
+        'documents': documents,
+        'search_params': request.GET,
+        'directorates': Directorate.objects.all(),
+    }
+    return render(request, 'core/search.html', context)
