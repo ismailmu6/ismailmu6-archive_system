@@ -7,6 +7,7 @@ from django.http import FileResponse, Http404
 from django.db.models import Q
 from django.utils.dateparse import parse_date
 from django.core.paginator import Paginator
+from django.db import IntegrityError   # <-- أضيفت لمعالجة التكرار عند الحفظ
 
 from .models import Document, Comment, Tag, AuditLog, Folder, Directorate, Department, CustomUser
 from .permissions import (
@@ -324,6 +325,7 @@ def upload_document(request):
             return _upload_error(request, folder, 'تاريخ الوثيقة غير صالح.')
         document_year = parsed_date.year
 
+        # فحص التكرار اليدوي
         duplicate_exists = Document.objects.filter(
             directorate=request.user.directorate,
             document_year=document_year,
@@ -335,19 +337,26 @@ def upload_document(request):
                 f'رقم الوثيقة "{document_number}" مستخدم مسبقاً ضمن مديرية {request.user.directorate.name} لسنة {document_year}. الرجاء اختيار رقم آخر.'
             )
 
-        doc = Document.objects.create(
-            document_number=document_number,
-            title=title,
-            file=uploaded_file,
-            document_date=parsed_date,
-            source=source,
-            issuing_directorate_id=issuing_directorate_id if source == Document.Source.INTERNAL else None,
-            external_entity_name=external_entity_name if source == Document.Source.EXTERNAL else '',
-            folder=folder,
-            directorate=request.user.directorate,
-            department=department,
-            uploaded_by=request.user,
-        )
+        try:
+            doc = Document.objects.create(
+                document_number=document_number,
+                title=title,
+                file=uploaded_file,
+                document_date=parsed_date,
+                source=source,
+                issuing_directorate_id=issuing_directorate_id if source == Document.Source.INTERNAL else None,
+                external_entity_name=external_entity_name if source == Document.Source.EXTERNAL else '',
+                folder=folder,
+                directorate=request.user.directorate,
+                department=department,
+                uploaded_by=request.user,
+            )
+        except IntegrityError:
+            # لو حدث تعارض حقيقي في نفس اللحظة نتيجة التزامن
+            return _upload_error(
+                request, folder,
+                f'رقم الوثيقة "{document_number}" مستخدم مسبقاً ضمن مديرية {request.user.directorate.name} لسنة {document_year}. الرجاء اختيار رقم آخر.'
+            )
 
         for tag_name in [t.strip() for t in tags_raw.split(',') if t.strip()]:
             tag, _ = Tag.objects.get_or_create(name=tag_name)
@@ -556,7 +565,14 @@ def edit_document(request, doc_id):
                     document.title = title
                     document.document_number = document_number
                     document.document_date = parsed_date
-                    document.save()
+                    try:
+                        document.save()
+                    except IntegrityError:
+                        messages.error(
+                            request,
+                            f'رقم الوثيقة "{document_number}" مستخدم مسبقاً ضمن مديرية {document.directorate.name} لسنة {parsed_date.year}. الرجاء اختيار رقم آخر.'
+                        )
+                        return render(request, 'core/edit_document.html', {'document': document})
                     log_action(request.user, document, AuditLog.Action.EDIT)
                     messages.success(request, 'تم تعديل الوثيقة بنجاح.')
                     return redirect('document_detail', doc_id=document.id)
