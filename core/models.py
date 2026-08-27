@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.core.validators import RegexValidator
 
 
 # ==========================================================
@@ -34,6 +35,9 @@ class Department(models.Model):
         verbose_name_plural = "الدوائر"
         ordering = ['directorate', 'name']
         unique_together = ('directorate', 'name')  # ما يتكرر نفس اسم الدائرة بنفس المديرية
+        indexes = [
+            models.Index(fields=['directorate']),
+        ]
 
     def __str__(self):
         return f"{self.name} - {self.directorate.name}"
@@ -88,6 +92,11 @@ class CustomUser(AbstractUser):
     class Meta:
         verbose_name = "مستخدم"
         verbose_name_plural = "المستخدمون"
+        indexes = [
+            models.Index(fields=['role']),
+            models.Index(fields=['directorate']),
+            models.Index(fields=['department']),
+        ]
 
     def __str__(self):
         if self.role:
@@ -135,6 +144,12 @@ class Folder(models.Model):
         verbose_name = "مجلد"
         verbose_name_plural = "المجلدات"
         ordering = ['name']
+        indexes = [
+            models.Index(fields=['parent']),
+            models.Index(fields=['directorate']),
+            models.Index(fields=['department']),
+            models.Index(fields=['created_by']),
+        ]
 
     def __str__(self):
         return self.name
@@ -169,25 +184,21 @@ class Document(models.Model):
         INTERNAL = 'internal', 'داخلي'
         EXTERNAL = 'external', 'خارجي'
 
-    document_number = models.CharField(max_length=50, verbose_name="رقم الوثيقة")
+    document_number = models.CharField(
+        max_length=50,
+        validators=[RegexValidator(r'^\d.*$', 'يجب أن يبدأ رقم الوثيقة برقم.')],
+        verbose_name="رقم الوثيقة"
+    )
     title = models.CharField(max_length=255, verbose_name="اسم الوثيقة")
     file = models.FileField(upload_to='archive/%Y/%m/', verbose_name="الملف")
 
     document_date = models.DateField(verbose_name="تاريخ الوثيقة")
-    # تُملأ تلقائياً من سنة document_date عند الحفظ (راجع save() أدناه) - محفوظة
-    # كحقل صريح (لا محسوبة عند الاستعلام) حتى يمكن استخدامها بقيد فريد بقاعدة البيانات.
-    # القيمة الافتراضية 0 مؤقتة فقط لتفادي سؤال تفاعلي عند أول migration على بيانات
-    # موجودة مسبقاً - تُستبدل بالسنة الصحيحة فوراً عند أول حفظ لكل وثيقة (راجع الشرح
-    # أسفل الملف لأمر التصحيح الجماعي لمرة واحدة بعد الترحيل)
     document_year = models.PositiveIntegerField(editable=False, default=0, verbose_name="سنة الوثيقة")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاريخ الرفع")
 
     tags = models.ManyToManyField(Tag, blank=True, related_name='documents', verbose_name="الوسوم")
     source = models.CharField(max_length=10, choices=Source.choices, verbose_name="المصدر")
 
-    # الجهة الصادرة: تختلف حسب المصدر -
-    # داخلي  → تُختار من قائمة المديريات الموجودة فعلاً بالنظام (issuing_directorate)
-    # خارجي  → نص حر يكتبه الموظف بما أن جهات خارجية كثيرة وغير محصورة (external_entity_name)
     issuing_directorate = models.ForeignKey(
         Directorate, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='issued_documents', verbose_name="المديرية الصادرة عنها (داخلي)"
@@ -196,13 +207,11 @@ class Document(models.Model):
         max_length=255, null=True, blank=True, verbose_name="اسم الجهة الخارجية"
     )
 
-    # المجلد اختياري: الموظف قد يرفع الوثيقة مباشرة بدون مجلد، أو داخل مجلد نظّمه بنفسه
     folder = models.ForeignKey(
         Folder, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='documents', verbose_name="المجلد"
     )
 
-    # تُحدَّد تلقائياً من حساب المستخدم وقت الرفع - لا تُعرض كحقل اختيار بالنموذج
     directorate = models.ForeignKey(
         Directorate, on_delete=models.PROTECT, related_name='documents', verbose_name="المديرية"
     )
@@ -224,10 +233,13 @@ class Document(models.Model):
             models.Index(fields=['title']),
             models.Index(fields=['document_date']),
             models.Index(fields=['source']),
+            models.Index(fields=['directorate']),
+            models.Index(fields=['department']),
+            models.Index(fields=['uploaded_by']),
+            models.Index(fields=['folder']),
+            models.Index(fields=['document_year']),
+            models.Index(fields=['created_at']),
         ]
-        # قيد على مستوى قاعدة البيانات: رقم الوثيقة لا يتكرر ضمن نفس المديرية
-        # وفي نفس السنة فقط - أي يجوز أن يتكرر نفس الرقم بسنة جديدة (يبدأ الترقيم
-        # من جديد كل سنة)، أو بمديرية مختلفة (كل مديرية لها ترقيمها المستقل)
         constraints = [
             models.UniqueConstraint(
                 fields=['directorate', 'document_year', 'document_number'],
@@ -241,21 +253,11 @@ class Document(models.Model):
 
     @property
     def full_number(self):
-        """
-        صيغة العرض المدمجة "رقم/سنة" (مثلاً "1/2025") - للاستخدام بالقوالب فقط.
-        الحقلان يبقيان منفصلين بقاعدة البيانات (document_number نص صرف يكتبه
-        الموظف، document_year يُشتق تلقائياً)، وهذه الخاصية فقط تجمعهما للعرض.
-        """
         return f"{self.document_number}/{self.document_year}"
 
     def save(self, *args, **kwargs):
-        # ضمان إضافي: الدائرة والمديرية يجب أن تتطابق
         if self.department_id and self.department.directorate_id != self.directorate_id:
             self.directorate_id = self.department.directorate_id
-        # سنة الوثيقة تُشتق تلقائياً من تاريخ الوثيقة نفسه (مو تاريخ الرفع)،
-        # وهي أساس تصفير الترقيم كل سنة جديدة. حماية إضافية هنا: إذا وصل
-        # التاريخ كنص (بدل كائن date حقيقي) من أي مسار استدعاء لا يمر
-        # بعملية validation تلقائية، نحوّله هنا أيضاً بدل أن ينهار الحفظ
         if self.document_date:
             if isinstance(self.document_date, str):
                 from django.utils.dateparse import parse_date
@@ -281,6 +283,10 @@ class Comment(models.Model):
         verbose_name = "تعليق"
         verbose_name_plural = "التعليقات"
         ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['document']),
+            models.Index(fields=['created_by']),
+        ]
 
     def __str__(self):
         return f"تعليق على {self.document.document_number}"
@@ -298,14 +304,13 @@ class AuditLog(models.Model):
         DELETE = 'DELETE', 'حذف'
         DOWNLOAD = 'DOWNLOAD', 'تحميل'
 
-    # نحتفظ برقم/اسم الوثيقة كنص أيضاً حتى لو انحذفت لاحقاً (سجل تاريخي دائم)
     document = models.ForeignKey(Document, on_delete=models.SET_NULL, null=True, related_name='audit_logs')
     document_number = models.CharField(max_length=50)
     document_title = models.CharField(max_length=255)
 
     action = models.CharField(max_length=10, choices=Action.choices)
     performed_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True)
-    performed_by_role = models.CharField(max_length=3)  # الدور وقت تنفيذ الإجراء تحديداً
+    performed_by_role = models.CharField(max_length=3)
 
     timestamp = models.DateTimeField(auto_now_add=True)
     notes = models.TextField(blank=True)
@@ -314,6 +319,12 @@ class AuditLog(models.Model):
         verbose_name = "سجل تدقيق"
         verbose_name_plural = "سجلات التدقيق"
         ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['timestamp']),
+            models.Index(fields=['performed_by']),
+            models.Index(fields=['document']),
+            models.Index(fields=['action']),
+        ]
 
     def __str__(self):
         return f"{self.get_action_display()} - {self.document_number} - {self.timestamp:%Y-%m-%d %H:%M}"

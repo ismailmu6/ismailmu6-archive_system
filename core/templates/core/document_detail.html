@@ -63,7 +63,12 @@
         <a href="{% url 'download_document' document.id %}" class="btn btn-primary">
             <i class="fas fa-download"></i> تحميل الملف
         </a>
-        {% if can_manage %}
+        {% if can_edit %}
+        <a href="{% url 'edit_document' document.id %}" class="btn btn-secondary">
+            <i class="fas fa-edit"></i> تعديل
+        </a>
+        {% endif %}
+        {% if can_delete %}
         <a href="{% url 'delete_document' document.id %}" class="btn btn-danger">
             <i class="fas fa-trash-alt"></i> حذف
         </a>

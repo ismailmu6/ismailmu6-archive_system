@@ -6,11 +6,6 @@
 <div class="card" style="max-width: 550px; margin: 0 auto;">
     <h2 class="section-title">رفع وثيقة جديدة</h2>
 
-    <div class="msg msg-info">
-        المديرية: {{ request.user.directorate.name }} — الدائرة: {{ request.user.department.name }}
-        {% if folder %} — المجلد: {{ folder.name }}{% endif %}
-    </div>
-
     <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
         {% if folder %}<input type="hidden" name="folder_id" value="{{ folder.id }}">{% endif %}
@@ -29,6 +24,16 @@
 
         <label for="id_tags">الوسوم (افصل بينها بفاصلة)</label>
         <input type="text" id="id_tags" name="tags" placeholder="مثال: مالية, 2026, عاجل">
+
+        {% if departments %}
+        <label for="id_department">الدائرة</label>
+        <select id="id_department" name="department_id" required>
+            <option value="">-- اختر الدائرة --</option>
+            {% for dept in departments %}
+            <option value="{{ dept.id }}">{{ dept.name }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}
 
         <label for="id_source">المصدر</label>
         <select id="id_source" name="source" data-source-toggle required>

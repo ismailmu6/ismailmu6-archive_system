@@ -1,0 +1,29 @@
+{% extends 'core/base.html' %}
+{% block title %}تعديل وثيقة - نظام الأرشفة{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 550px; margin: 0 auto;">
+    <h2 class="section-title"><i class="fas fa-edit"></i> تعديل الوثيقة</h2>
+
+    <div class="msg msg-info">
+        الوثيقة: {{ document.full_number }}
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <label for="id_document_number">رقم الوثيقة</label>
+        <input type="text" id="id_document_number" name="document_number"
+               value="{{ document.document_number }}" required>
+
+        <label for="id_title">اسم الوثيقة</label>
+        <input type="text" id="id_title" name="title" value="{{ document.title }}" required>
+
+        <label for="id_document_date">التاريخ</label>
+        <input type="date" id="id_document_date" name="document_date" value="{{ document.document_date|date:'Y-m-d' }}" required>
+
+        <button type="submit" class="btn btn-primary btn-block">حفظ التعديلات</button>
+        <a href="{% url 'document_detail' document.id %}" class="btn btn-secondary btn-block">إلغاء</a>
+    </form>
+</div>
+{% endblock %}

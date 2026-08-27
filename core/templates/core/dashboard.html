@@ -21,43 +21,19 @@
     </div>
 
     <div class="toolbar">
+        {% if request.user.role != 'GM' %}
         <a href="{% url 'upload' %}" class="btn btn-primary">
             <i class="fas fa-upload"></i> رفع وثيقة جديدة
         </a>
+        {% endif %}
         <a href="{% url 'folder_list' %}" class="btn btn-secondary">
             <i class="fas fa-folder-open"></i> تصفح المجلدات
         </a>
+        <a href="{% url 'search' %}" class="btn btn-secondary">
+            <i class="fas fa-search"></i> البحث في الوثائق
+        </a>
     </div>
 
-    <table>
-        <thead>
-            <tr>
-                <th>رقم الوثيقة</th>
-                <th>الاسم</th>
-                <th>الدائرة</th>
-                <th>التاريخ</th>
-                <th>رفعها</th>
-                <th>إجراء</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for doc in recent_documents %}
-            <tr>
-                <td>{{ doc.full_number }}</td>
-                <td>{{ doc.title }}</td>
-                <td>{{ doc.department.name }}</td>
-                <td>{{ doc.document_date }}</td>
-                <td>{{ doc.uploaded_by }}</td>
-                <td>
-                    <a href="{% url 'document_detail' doc.id %}" class="btn btn-primary">عرض</a>
-                </td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="6">لا توجد وثائق بعد</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <!-- لا يوجد جدول وثائق هنا -->
 </div>
 {% endblock %}

@@ -11,6 +11,7 @@ urlpatterns = [
 
     path('document/<int:doc_id>/', views.document_detail, name='document_detail'),
     path('document/<int:doc_id>/download/', views.download_document, name='download_document'),
+    path('document/<int:doc_id>/edit/', views.edit_document, name='edit_document'),
     path('document/<int:doc_id>/delete/', views.delete_document, name='delete_document'),
     path('document/<int:doc_id>/comment/', views.add_comment, name='add_comment'),
 

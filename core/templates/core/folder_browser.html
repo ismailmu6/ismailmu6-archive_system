@@ -15,6 +15,11 @@
         <a href="{% url 'upload' %}?folder_id={{ current_folder.id }}" class="btn btn-primary">
             <i class="fas fa-upload"></i> رفع وثيقة هنا
         </a>
+        {% if can_delete %}
+        <a href="{% url 'delete_folder' current_folder.id %}" class="btn btn-danger">
+            <i class="fas fa-trash-alt"></i> حذف المجلد
+        </a>
+        {% endif %}
     {% else %}
         <a href="{% url 'create_folder' %}" class="btn btn-secondary">
             <i class="fas fa-folder-plus"></i> مجلد جديد
@@ -38,12 +43,33 @@
         <div class="empty">لا توجد مجلدات</div>
         {% endfor %}
     </div>
+
+    <!-- ترقيم المجلدات -->
+    {% if folders.has_other_pages %}
+    <div class="pagination">
+        <span class="step-links">
+            {% if folders.has_previous %}
+                <a href="?folders_page=1&page={{ page_obj.number }}">&laquo; الأولى</a>
+                <a href="?folders_page={{ folders.previous_page_number }}&page={{ page_obj.number }}">السابقة</a>
+            {% endif %}
+
+            <span class="current">
+                صفحة {{ folders.number }} من {{ folders.paginator.num_pages }}
+            </span>
+
+            {% if folders.has_next %}
+                <a href="?folders_page={{ folders.next_page_number }}&page={{ page_obj.number }}">التالية</a>
+                <a href="?folders_page={{ folders.paginator.num_pages }}&page={{ page_obj.number }}">الأخيرة &raquo;</a>
+            {% endif %}
+        </span>
+    </div>
+    {% endif %}
 </div>
 
 <div class="card">
     <h4 class="section-title"><i class="fas fa-file"></i> الوثائق {% if current_folder %}هنا{% endif %}</h4>
     <div class="grid">
-        {% for doc in documents %}
+        {% for doc in page_obj %}
         <a href="{% url 'document_detail' doc.id %}" class="item">
             <span class="icon"><i class="fas fa-file-alt"></i></span>
             <span class="name">{{ doc.title }}</span>
@@ -53,5 +79,26 @@
         <div class="empty">لا توجد وثائق</div>
         {% endfor %}
     </div>
+
+    <!-- ترقيم الوثائق -->
+    {% if page_obj.has_other_pages %}
+    <div class="pagination">
+        <span class="step-links">
+            {% if page_obj.has_previous %}
+                <a href="?page=1&folders_page={{ folders.number }}">&laquo; الأولى</a>
+                <a href="?page={{ page_obj.previous_page_number }}&folders_page={{ folders.number }}">السابقة</a>
+            {% endif %}
+
+            <span class="current">
+                صفحة {{ page_obj.number }} من {{ page_obj.paginator.num_pages }}
+            </span>
+
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}&folders_page={{ folders.number }}">التالية</a>
+                <a href="?page={{ page_obj.paginator.num_pages }}&folders_page={{ folders.number }}">الأخيرة &raquo;</a>
+            {% endif %}
+        </span>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

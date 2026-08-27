@@ -19,6 +19,16 @@
         <label for="folder-name">اسم المجلد</label>
         <input type="text" id="folder-name" name="name" required autofocus>
 
+        {% if departments %}
+        <label for="department-select">الدائرة</label>
+        <select id="department-select" name="department_id" required>
+            <option value="">-- اختر الدائرة --</option>
+            {% for dept in departments %}
+            <option value="{{ dept.id }}">{{ dept.name }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}
+
         <div class="actions">
             {% if parent %}
             <a href="{% url 'folder_detail' parent.id %}" class="btn btn-secondary">

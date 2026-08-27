@@ -39,7 +39,9 @@
             </span>
             <a href="{% url 'dashboard' %}"><i class="fas fa-home"></i> الرئيسية</a>
             <a href="{% url 'folder_list' %}"><i class="fas fa-folder-open"></i> الأرشيف</a>
+            {% if user.role != 'GM' %}
             <a href="{% url 'upload' %}"><i class="fas fa-upload"></i> رفع وثيقة</a>
+            {% endif %}
             <a href="{% url 'search' %}"><i class="fas fa-search"></i> البحث</a>
             <a href="{% url 'logout' %}" class="logout-link"><i class="fas fa-sign-out-alt"></i> تسجيل الخروج</a>
         </nav>

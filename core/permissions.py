@@ -11,6 +11,12 @@ core/permissions.py
     مدير مديرية      → يرى وثائق مديريته فقط (بكل دوائرها)
     رئيس دائرة       → يرى وثائق دائرته فقط (لا يرى دوائر أخرى حتى بنفس مديريته)
     موظف            → يرى وثائقه هو فقط (التي رفعها بنفسه)
+
+الصلاحيات الخاصة بالتعديل والحذف:
+    - التعديل: متاح لصاحب الوثيقة دائماً، وللمسؤولين الأعلى ضمن نطاقهم
+    - الحذف: الموظف العادي لا يستطيع الحذف إطلاقاً حتى لو كان صاحب الوثيقة،
+             بينما المسؤولون (مدير عام / مدير مديرية / رئيس دائرة) يستطيعون
+             ضمن نطاقهم فقط.
 """
 
 from .models import Document, CustomUser, Folder
@@ -55,14 +61,18 @@ def can_view_document(user, document):
     return get_visible_documents(user).filter(pk=document.pk).exists()
 
 
-def can_manage_document(user, document):
+def can_edit_document(user, document):
     """
-    فحص إمكانية التعديل أو الحذف. صاحب الوثيقة يقدر دائماً، وأي مسؤول
-    أعلى ضمن نطاقه التنظيمي المباشر يقدر كذلك (مع تسجيل الإجراء بسجل التدقيق).
+    يسمح بالتعديل على الوثيقة:
+    - صاحب الوثيقة (أي مستخدم رفعها) يستطيع تعديلها دائماً.
+    - المدير العام يستطيع تعديل أي وثيقة.
+    - مدير المديرية يستطيع تعديل وثائق مديريته فقط.
+    - رئيس الدائرة يستطيع تعديل وثائق دائرته فقط.
     """
     if not user.is_authenticated:
         return False
 
+    # صاحب الوثيقة يستطيع التعديل (حتى لو كان موظفاً عادياً)
     if document.uploaded_by_id == user.id:
         return True
 
@@ -76,6 +86,39 @@ def can_manage_document(user, document):
         return document.department_id == user.department_id
 
     return False
+
+
+def can_delete_document(user, document):
+    """
+    يسمح بحذف الوثيقة:
+    - الموظف العادي (EMPLOYEE) لا يستطيع الحذف نهائياً حتى لو كان صاحب الوثيقة.
+    - المدير العام يستطيع حذف أي وثيقة.
+    - مدير المديرية يستطيع حذف وثائق مديريته فقط.
+    - رئيس الدائرة يستطيع حذف وثائق دائرته فقط.
+    """
+    if not user.is_authenticated:
+        return False
+
+    # منع الموظف العادي من الحذف إطلاقاً
+    if user.role == CustomUser.Role.EMPLOYEE:
+        return False
+
+    if user.role == CustomUser.Role.GENERAL_MANAGER:
+        return True
+
+    if user.role == CustomUser.Role.DIRECTORATE_MANAGER:
+        return document.directorate_id == user.directorate_id
+
+    if user.role == CustomUser.Role.HEAD_OF_DEPT:
+        return document.department_id == user.department_id
+
+    return False
+
+
+# للتوافق مع أي كود قديم، يمكن الإبقاء على can_manage_document لكن نوجهها إلى can_edit_document
+def can_manage_document(user, document):
+    """مرادف لـ can_edit_document (للتوافق مع أي استخدام سابق)"""
+    return can_edit_document(user, document)
 
 
 def is_supervisory_action(user, document):
@@ -119,12 +162,36 @@ def can_view_folder(user, folder):
 
 
 def can_manage_folder(user, folder):
-    """نفس منطق can_manage_document تماماً، مطبَّق على المجلد"""
+    """نفس منطق can_manage_document (التعديل) مطبَّق على المجلد (للتعديل مستقبلاً)"""
     if not user.is_authenticated:
         return False
 
     if folder.created_by_id == user.id:
         return True
+
+    if user.role == CustomUser.Role.GENERAL_MANAGER:
+        return True
+
+    if user.role == CustomUser.Role.DIRECTORATE_MANAGER:
+        return folder.directorate_id == user.directorate_id
+
+    if user.role == CustomUser.Role.HEAD_OF_DEPT:
+        return folder.department_id == user.department_id
+
+    return False
+
+
+def can_delete_folder(user, folder):
+    """
+    يسمح بحذف المجلد فقط للمسؤولين (مدير عام / مدير مديرية / رئيس قسم) ضمن نطاقهم.
+    الموظف العادي لا يستطيع حذف المجلد حتى لو كان منشئه.
+    """
+    if not user.is_authenticated:
+        return False
+
+    # منع الموظف العادي من حذف المجلد
+    if user.role == CustomUser.Role.EMPLOYEE:
+        return False
 
     if user.role == CustomUser.Role.GENERAL_MANAGER:
         return True
