@@ -2,84 +2,142 @@
 {% block title %}{{ document.title }} - نظام الأرشفة{% endblock %}
 
 {% block content %}
-<div class="card">
-    <h2 class="section-title">{{ document.title }}</h2>
+<div class="card" style="padding: 16px 18px; margin-bottom: 14px;">
+    <h2 class="section-title" style="margin-bottom: 12px;">{{ document.title }}</h2>
 
-    <div class="detail-row">
-        <div class="detail-key">رقم الوثيقة</div>
-        <div class="detail-value">{{ document.full_number }}</div>
-    </div>
-    <div class="detail-row">
-        <div class="detail-key">التاريخ</div>
-        <div class="detail-value">{{ document.document_date }}</div>
-    </div>
-    <div class="detail-row">
-        <div class="detail-key">المديرية</div>
-        <div class="detail-value">{{ document.directorate.name }}</div>
-    </div>
-    <div class="detail-row">
-        <div class="detail-key">الدائرة</div>
-        <div class="detail-value">{{ document.department.name }}</div>
-    </div>
-    {% if document.folder %}
-    <div class="detail-row">
-        <div class="detail-key">المجلد</div>
-        <div class="detail-value"><i class="fas fa-folder"></i> <a href="{% url 'folder_detail' document.folder.id %}">{{ document.folder.name }}</a></div>
-    </div>
-    {% endif %}
-    <div class="detail-row">
-        <div class="detail-key">المصدر</div>
-        <div class="detail-value">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 18px; margin-bottom: 14px;">
+        <div><span style="font-weight:700; color:#52606d;">رقم الوثيقة:</span> {{ document.full_number }}</div>
+        <div><span style="font-weight:700; color:#52606d;">رقم الديوان:</span> {{ document.diwan_number|default:"غير محدد" }}</div>
+        <div><span style="font-weight:700; color:#52606d;">نوع الوثيقة:</span> {{ document.document_type.name|default:"غير محدد" }}</div>
+        <div><span style="font-weight:700; color:#52606d;">التاريخ:</span> {{ document.document_date }}</div>
+        <div><span style="font-weight:700; color:#52606d;">تاريخ التصدير/الختم:</span> {{ document.export_date|default:"غير محدد" }}</div>
+        <div><span style="font-weight:700; color:#52606d;">المديرية:</span> {{ document.directorate.name }}</div>
+        <div><span style="font-weight:700; color:#52606d;">الدائرة:</span> {{ document.department.name }}</div>
+        <div>
+            <span style="font-weight:700; color:#52606d;">المجلد:</span>
+            {% if document.folder %}
+                <a href="{% url 'folder_detail' document.folder.id %}">{{ document.folder.name }}</a>
+            {% else %}
+                غير مصنف
+            {% endif %}
+        </div>
+        <div><span style="font-weight:700; color:#52606d;">المصدر:</span>
             <span class="badge {% if document.source == 'internal' %}badge-internal{% else %}badge-external{% endif %}">
                 {{ document.get_source_display }}
             </span>
         </div>
-    </div>
-    {% if document.source == 'internal' and document.issuing_directorate %}
-    <div class="detail-row">
-        <div class="detail-key">المديرية الصادرة عنها</div>
-        <div class="detail-value">{{ document.issuing_directorate.name }}</div>
-    </div>
-    {% elif document.source == 'external' and document.external_entity_name %}
-    <div class="detail-row">
-        <div class="detail-key">الجهة الخارجية</div>
-        <div class="detail-value">{{ document.external_entity_name }}</div>
-    </div>
-    {% endif %}
-    <div class="detail-row">
-        <div class="detail-key">الوسوم</div>
-        <div class="detail-value">
+        {% if document.source == 'internal' and document.issuing_directorate %}
+        <div><span style="font-weight:700; color:#52606d;">المديرية الصادرة عنها:</span> {{ document.issuing_directorate.name }}</div>
+        {% elif document.source == 'external' and document.external_entity_name %}
+        <div><span style="font-weight:700; color:#52606d;">الجهة الخارجية:</span> {{ document.external_entity_name }}</div>
+        {% endif %}
+        <div><span style="font-weight:700; color:#52606d;">الجهة المحولة إليها:</span> {{ document.destination_entity_name|default:"غير محدد" }}</div>
+        <div><span style="font-weight:700; color:#52606d;">الوسوم:</span>
             {% for tag in document.tags.all %}
                 <span class="badge badge-tag">{{ tag.name }}</span>
             {% endfor %}
         </div>
-    </div>
-    <div class="detail-row">
-        <div class="detail-key">رفعها</div>
-        <div class="detail-value">{{ document.uploaded_by }}</div>
+        <div><span style="font-weight:700; color:#52606d;">رفعها:</span> {{ document.uploaded_by }}</div>
     </div>
 
-    <div class="actions">
-        <a href="{% url 'download_document' document.id %}" class="btn btn-primary">
-            <i class="fas fa-download"></i> تحميل الملف
-        </a>
+    <div class="actions" style="margin-top: 4px;">
+        <a href="{% url 'preview_document' document.id %}" class="btn btn-secondary" target="_blank">معاينة</a>
+        <a href="{% url 'download_document' document.id %}" class="btn btn-primary">تحميل الملف</a>
         {% if can_edit %}
-        <a href="{% url 'edit_document' document.id %}" class="btn btn-secondary">
-            <i class="fas fa-edit"></i> تعديل
-        </a>
+        <a href="{% url 'edit_document' document.id %}" class="btn btn-secondary">تعديل</a>
+        <a href="{% url 'update_document_file' document.id %}" class="btn btn-secondary">🔄 تحديث الملف</a>
         {% endif %}
         {% if can_delete %}
-        <a href="{% url 'delete_document' document.id %}" class="btn btn-danger">
-            <i class="fas fa-trash-alt"></i> حذف
-        </a>
+        <a href="{% url 'delete_document' document.id %}" class="btn btn-danger">حذف</a>
         {% endif %}
     </div>
 </div>
 
-<div class="card">
-    <h3 class="section-title"><i class="fas fa-comments"></i> التعليقات</h3>
+<div class="card" style="padding: 16px 18px; margin-bottom: 14px;">
+    <h3 class="section-title" style="margin-bottom: 12px;">الملفات المرفقة</h3>
+    {% if attachments %}
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            {% for att in attachments %}
+            <div style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid #e3e7e4; border-radius: 8px; background: #fbfcfb; flex-wrap: wrap;">
+                <span style="font-size: 18px;">📎</span>
+                <div style="flex: 1; min-width: 150px;">
+                    <div style="font-weight: 700; color: #0f4a42; overflow-wrap: anywhere;">{{ att.file.name }}</div>
+                    <div style="font-size: 11px; color: #7b8794;">{{ att.uploaded_by|default:"غير معروف" }} — {{ att.uploaded_at|date:"Y-m-d H:i" }}</div>
+                </div>
+                <a href="{{ att.file.url }}" target="_blank" class="btn btn-secondary" style="min-height: 32px; padding: 0 10px; font-size: 12px;">معاينة</a>
+                <a href="{{ att.file.url }}" download class="btn btn-primary" style="min-height: 32px; padding: 0 10px; font-size: 12px;">تحميل</a>
+
+                {% if can_edit %}
+                <form method="post" action="{% url 'replace_attachment' att.id %}" enctype="multipart/form-data"
+                      style="display:inline-flex; gap:6px; align-items:center; margin:0; padding:4px 6px; border:1px dashed #b8c4be; border-radius:6px; background:#ffffff;">
+                    {% csrf_token %}
+                    <label for="replace-file-{{ att.id }}" style="font-size:11px; color:#52606d; white-space:nowrap; margin:0;">استبدال:</label>
+                    <input type="file" id="replace-file-{{ att.id }}" name="file" required
+                           style="font-size:11px; max-width:180px; min-height:30px; padding:2px; border:1px solid #e3e7e4; border-radius:4px; background:#fff;">
+                    <button type="submit" class="btn btn-secondary"
+                            style="min-height:32px; padding:0 10px; font-size:12px;">
+                        استبدال
+                    </button>
+                </form>
+                {% endif %}
+
+                {% if can_delete %}
+                <form method="post" action="{% url 'delete_attachment' att.id %}" style="display:inline; margin:0;" onsubmit="return confirm('هل أنت متأكد من حذف هذا المرفق؟');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger" style="min-height: 32px; padding: 0 10px; font-size: 12px;">حذف</button>
+                </form>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p>لا توجد ملفات مرفقة إضافية.</p>
+    {% endif %}
+
+    {% if can_edit %}
+    <form method="post" action="{% url 'upload_attachment' document.id %}" enctype="multipart/form-data" style="margin-top: 12px;">
+        {% csrf_token %}
+        <div style="display: flex; gap: 8px; align-items: end; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 200px;">
+                <label for="attachment-file" style="font-size: 12px; margin-bottom: 4px;">إضافة ملف مرفق جديد</label>
+                <input type="file" id="attachment-file" name="file" required style="min-height: 38px;">
+            </div>
+            <button type="submit" class="btn btn-secondary" style="min-height: 38px;">رفع الملف المرفق</button>
+        </div>
+    </form>
+    {% endif %}
+</div>
+
+<div class="card" style="padding: 16px 18px; margin-bottom: 14px;">
+    <h3 class="section-title" style="margin-bottom: 12px;">🕓 النسخ السابقة</h3>
+    {% if versions %}
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            {% for v in versions %}
+            <div style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid #e3e7e4; border-radius: 8px; background: #fbfcfb; flex-wrap: wrap;">
+                <span style="font-size: 18px;">🕓</span>
+                <div style="flex: 1; min-width: 150px;">
+                    <div style="font-weight: 700; color: #0f4a42; overflow-wrap: anywhere;">
+                        {{ v.original_filename|default:v.file_name }}
+                    </div>
+                    <div style="font-size: 11px; color: #7b8794;">
+                        {{ v.uploaded_by|default:"غير معروف" }} — {{ v.uploaded_at|date:"Y-m-d H:i" }}
+                        {% if v.note %} — {{ v.note }}{% endif %}
+                    </div>
+                </div>
+                <a href="{{ MEDIA_URL }}{{ v.file_name }}" download class="btn btn-primary" style="min-height: 32px; padding: 0 10px; font-size: 12px;">تحميل</a>
+                <a href="{{ MEDIA_URL }}{{ v.file_name }}" target="_blank" class="btn btn-secondary" style="min-height: 32px; padding: 0 10px; font-size: 12px;">معاينة</a>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p>لا توجد نسخ سابقة.</p>
+    {% endif %}
+</div>
+
+<div class="card" style="padding: 16px 18px; margin-bottom: 14px;">
+    <h3 class="section-title" style="margin-bottom: 10px;">التعليقات</h3>
     {% for c in comments %}
-    <div class="comment-item">
+    <div class="comment-item" style="padding: 8px 0;">
         <div class="comment-meta">{{ c.created_by }} — {{ c.created_at }}</div>
         <div>{{ c.text }}</div>
     </div>
@@ -87,13 +145,11 @@
     <div>لا توجد تعليقات بعد</div>
     {% endfor %}
 
-    <form method="post" action="{% url 'add_comment' document.id %}" class="comment-form">
+    <form method="post" action="{% url 'add_comment' document.id %}" style="margin-top: 10px;">
         {% csrf_token %}
-        <label for="comment-text">أضف تعليقاً</label>
-        <textarea id="comment-text" name="text" rows="3" required></textarea>
-        <button type="submit" class="btn btn-primary">
-            <i class="fas fa-plus-circle"></i> إضافة تعليق
-        </button>
+        <label for="comment-text" style="font-size: 12px;">أضف تعليقاً</label>
+        <textarea id="comment-text" name="text" rows="2" required></textarea>
+        <button type="submit" class="btn btn-primary" style="min-height: 36px; margin-top: 6px;">إضافة تعليق</button>
     </form>
 </div>
 {% endblock %}

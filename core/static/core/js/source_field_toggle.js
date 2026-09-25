@@ -33,4 +33,39 @@ function initSourceFieldToggle() {
     });
 }
 
-document.addEventListener('DOMContentLoaded', initSourceFieldToggle);
+/*
+ * ==========================================================
+ * منطق "الجهة المحولة إليها"
+ * ==========================================================
+ * مشابه لمنطق المصدر أعلاه، لكنه أكثر عمومية: يعمل عبر أي عنصر
+ * <select> يحمل السمة data-toggle-group="اسم المجموعة"، ويرتبط
+ * تلقائياً بأي عنصر يحمل:
+ *   - data-panel-group="نفس اسم المجموعة"
+ *   - data-panel-value="القيمة التي يُظهر عندها"
+ *
+ * مثال: عند اختيار "داخلي" بالحقل data-toggle-group="destination"،
+ * يُظهر العنصر الذي يحمل data-panel-group="destination" و
+ * data-panel-value="internal"، ويُخفي الآخر.
+ */
+function initToggleGroups() {
+    document.querySelectorAll('[data-toggle-group]').forEach(function (select) {
+        var group = select.dataset.toggleGroup;
+        var container = select.closest('form') || document;
+        var panels = container.querySelectorAll('[data-panel-group="' + group + '"]');
+
+        function apply() {
+            var value = select.value;
+            panels.forEach(function (panel) {
+                panel.style.display = (panel.dataset.panelValue === value) ? '' : 'none';
+            });
+        }
+
+        select.addEventListener('change', apply);
+        apply(); // تطبيق فوري عند تحميل الصفحة
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    initSourceFieldToggle();
+    initToggleGroups();
+});

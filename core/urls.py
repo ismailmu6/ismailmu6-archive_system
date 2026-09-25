@@ -19,4 +19,10 @@ urlpatterns = [
     path('folders/<int:folder_id>/', views.folder_detail, name='folder_detail'),
     path('folders/create/', views.create_folder, name='create_folder'),
     path('folders/<int:folder_id>/delete/', views.delete_folder, name='delete_folder'),
+    path('document/<int:doc_id>/preview/', views.preview_document, name='preview_document'),
+    path('document/<int:doc_id>/upload_attachment/', views.upload_attachment, name='upload_attachment'),
+
+    # ✅✅✅ جديد: حذف مرفق (للمسؤولين فقط) ✅✅✅
+    path('attachment/<int:attachment_id>/delete/', views.delete_attachment, name='delete_attachment'),
+    path('document/<int:doc_id>/update-file/', views.update_document_file, name='update_document_file'),
 ]

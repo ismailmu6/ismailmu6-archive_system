@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django import forms
-from .models import CustomUser, Directorate, Department, Tag, Document, Comment, AuditLog, Folder
+from .models import CustomUser, Directorate, Department, Tag, Document, Comment, AuditLog, Folder, DocumentAttachment, DocumentType
 
 
 class DirectorateAwareDepartmentSelect(forms.Select):
@@ -51,11 +51,21 @@ class TagAdmin(admin.ModelAdmin):
 
 
 # ==========================================================
+# أنواع الوثائق - قائمة ثابتة تُدار من الأدمن مثل المديريات والدوائر
+# ==========================================================
+
+@admin.register(DocumentType)
+class DocumentTypeAdmin(admin.ModelAdmin):
+    list_display = ['name', 'document_count', 'created_at']
+    search_fields = ['name']
+
+    @admin.display(description='عدد الوثائق')
+    def document_count(self, obj):
+        return obj.documents.count()
+
+
+# ==========================================================
 # المجلدات
-#
-# مثل الوثيقة تماماً: بيانات إدارية بس (الاسم، من أنشأه، مديريته) تظهر
-# لأغراض الصيانة والدعم الفني، والإنشاء يبقى حصراً من واجهة النظام
-# العادية بمعرفة صاحب المجلد ونطاقه.
 # ==========================================================
 
 @admin.register(Folder)
@@ -75,12 +85,6 @@ class FolderAdmin(admin.ModelAdmin):
 
 @admin.register(CustomUser)
 class CustomUserAdmin(UserAdmin):
-    """
-    لوحة إدارة المستخدمين: عند إنشاء أو تعديل مستخدم، يحدد المسؤول
-    دوره ومديريته ودائرته مباشرة من هذه الشاشة - بدون أي تعديل كود.
-    قائمة "الدائرة" تُفلتَر تلقائياً (بـ JavaScript) لتعرض فقط دوائر
-    المديرية المختارة، منعاً لأي ربط خاطئ بين مديرية ودائرة لا تتبعها.
-    """
     model = CustomUser
     list_display = ['username', 'email', 'role', 'directorate', 'department', 'is_staff']
     list_filter = ['role', 'directorate', 'department', 'is_staff', 'is_active']
@@ -103,12 +107,6 @@ class CustomUserAdmin(UserAdmin):
 
 # ==========================================================
 # الوثائق
-#
-# ملاحظة أمنية مهمة: تسجيل الوثيقة هنا لا يعني كشف محتواها لأي شخص.
-# لوحة /admin أصلاً محصورة بحسابات is_staff فقط (موظف IT المخوَّل).
-# لكننا نمنع صراحة عرض حقل "الملف" نفسه من هذه الشاشة، بحيث يقدر IT
-# يشوف البيانات الإدارية (الرقم، الاسم، التاريخ، من رفعها) لأغراض
-# الصيانة والدعم الفني، دون أن يقدر يفتح أو يقرأ محتوى الملف الفعلي.
 # ==========================================================
 
 class CommentInline(admin.TabularInline):
@@ -120,17 +118,21 @@ class CommentInline(admin.TabularInline):
 
 @admin.register(Document)
 class DocumentAdmin(admin.ModelAdmin):
-    list_display = ['document_number', 'title', 'directorate', 'department',
-                     'source', 'document_date', 'uploaded_by']
-    list_filter = ['directorate', 'department', 'source', 'document_date']
-    search_fields = ['document_number', 'title']
+    list_display = ['document_number', 'title', 'document_type', 'diwan_number',
+                     'directorate', 'department',
+                     'destination_entity_name',
+                     'source', 'document_date', 'export_date', 'uploaded_by']
+    list_filter = ['document_type', 'directorate', 'department',
+                    'source', 'document_date']
+    search_fields = ['document_number', 'title', 'diwan_number', 'destination_entity_name']
     filter_horizontal = ['tags']
     inlines = [CommentInline]
 
-    # الحقول المعروضة عند فتح وثيقة بعينها - "file" غير موجود هنا عمداً
-    # حتى لا يقدر IT يفتح/يحمّل محتوى الملف نفسه من لوحة الإدارة
-    fields = ['document_number', 'title', 'document_date', 'source',
-              'issuing_directorate', 'external_entity_name', 'folder',
+    fields = ['document_number', 'title', 'document_type', 'diwan_number',
+              'document_date', 'export_date', 'source',
+              'issuing_directorate', 'external_entity_name',
+              'destination_entity_name',
+              'folder',
               'directorate', 'department', 'tags', 'uploaded_by', 'created_at']
     readonly_fields = ['created_at']
 
@@ -143,15 +145,27 @@ class DocumentAdmin(admin.ModelAdmin):
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     def has_add_permission(self, request):
-        # الوثائق تُرفع فقط من واجهة النظام العادية (بمعرفة صاحبها ونطاقه)
-        # وليس من لوحة إدارة Django
+        # الوثائق تُرفع فقط من واجهة النظام العادية
+        return False
+
+
+# ==========================================================
+# الملفات المرفقة
+# ==========================================================
+
+@admin.register(DocumentAttachment)
+class DocumentAttachmentAdmin(admin.ModelAdmin):
+    list_display = ['document', 'file', 'uploaded_by', 'uploaded_at']
+    search_fields = ['document__document_number', 'document__title']
+    readonly_fields = ['uploaded_at']
+
+    def has_add_permission(self, request):
+        # الإضافة تتم من واجهة النظام فقط
         return False
 
 
 # ==========================================================
 # سجل التدقيق (Audit Log)
-# سجل للقراءة فقط - يُنشأ تلقائياً من الكود عند كل إجراء إشرافي،
-# ولا يجوز التعديل عليه يدوياً بأي حال لضمان مصداقيته كسجل موثوق
 # ==========================================================
 
 @admin.register(AuditLog)

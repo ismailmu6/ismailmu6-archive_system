@@ -13,8 +13,23 @@
         </div>
 
         <div class="field">
+            <label for="id_diwan_number">رقم الديوان</label>
+            <input type="text" id="id_diwan_number" name="diwan_number" value="{{ request.GET.diwan_number }}" placeholder="أدخل رقم الديوان">
+        </div>
+
+        <div class="field">
             <label for="id_name">اسم الوثيقة</label>
             <input type="text" id="id_name" name="name" value="{{ request.GET.name }}">
+        </div>
+
+        <div class="field">
+            <label for="id_document_type">نوع الوثيقة</label>
+            <select id="id_document_type" name="document_type_id">
+                <option value="">الكل</option>
+                {% for dt in document_types %}
+                <option value="{{ dt.id }}" {% if request.GET.document_type_id == dt.id|stringformat:"s" %}selected{% endif %}>{{ dt.name }}</option>
+                {% endfor %}
+            </select>
         </div>
 
         <div class="field">
@@ -25,6 +40,21 @@
         <div class="field">
             <label for="id_date_to">إلى تاريخ</label>
             <input type="date" id="id_date_to" name="date_to" value="{{ request.GET.date_to }}">
+        </div>
+
+        <div class="field">
+            <label for="id_export_date_from">تاريخ التصدير من</label>
+            <input type="date" id="id_export_date_from" name="export_date_from" value="{{ request.GET.export_date_from }}">
+        </div>
+
+        <div class="field">
+            <label for="id_export_date_to">تاريخ التصدير إلى</label>
+            <input type="date" id="id_export_date_to" name="export_date_to" value="{{ request.GET.export_date_to }}">
+        </div>
+
+        <div class="field">
+            <label for="id_destination_entity_name">الجهة المحولة إليها</label>
+            <input type="text" id="id_destination_entity_name" name="destination_entity_name" value="{{ request.GET.destination_entity_name }}" placeholder="ابحث باسم الجهة">
         </div>
 
         <div class="field">
@@ -52,7 +82,7 @@
         </div>
 
         <div class="field" data-source-panel="external">
-            <label for="id_external_entity">اسم الجهة الخارجية</label>
+            <label for="id_external_entity">اسم الجهة الخارجية (المصدر)</label>
             <input type="text" id="id_external_entity" name="external_entity_name" value="{{ request.GET.external_entity_name }}" placeholder="ابحث باسم الجهة">
         </div>
 
@@ -71,11 +101,16 @@
             <thead>
                 <tr>
                     <th>رقم الوثيقة</th>
+                    <th>رقم الديوان</th>
                     <th>الاسم</th>
+                    <th>نوع الوثيقة</th>
                     <th>الدائرة</th>
                     <th>التاريخ</th>
+                    <th>تاريخ التصدير/الختم</th>
                     <th>المصدر</th>
                     <th>الجهة الصادرة</th>
+                    <th>الجهة المحولة إليها</th>
+                    <th>المجلد</th>
                     <th>إجراء</th>
                 </tr>
             </thead>
@@ -83,9 +118,12 @@
                 {% for doc in page_obj %}
                 <tr>
                     <td>{{ doc.full_number }}</td>
+                    <td>{{ doc.diwan_number|default:"—" }}</td>
                     <td>{{ doc.title }}</td>
+                    <td>{{ doc.document_type.name|default:"—" }}</td>
                     <td>{{ doc.department.name }}</td>
                     <td>{{ doc.document_date }}</td>
+                    <td>{{ doc.export_date|default:"—" }}</td>
                     <td>
                         {% if doc.source == 'internal' %}
                             <span class="badge badge-internal">داخلي</span>
@@ -97,7 +135,16 @@
                         {% if doc.source == 'internal' %}{{ doc.issuing_directorate.name|default:"—" }}
                         {% else %}{{ doc.external_entity_name|default:"—" }}{% endif %}
                     </td>
+                    <td>{{ doc.destination_entity_name|default:"—" }}</td>
                     <td>
+                        {% if doc.folder %}
+                            {{ doc.folder.name }}
+                        {% else %}
+                            غير مصنف
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{% url 'preview_document' doc.id %}" class="btn btn-secondary" target="_blank">معاينة</a>
                         <a href="{% url 'document_detail' doc.id %}" class="btn btn-primary">عرض</a>
                     </td>
                 </tr>

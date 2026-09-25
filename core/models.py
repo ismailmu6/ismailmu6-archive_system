@@ -22,7 +22,7 @@ class Directorate(models.Model):
 
 
 class Department(models.Model):
-    """الدائرة - تتبع مديرية واحدة، عدد الدوائر بكل مديرية غير محدود ومتغير"""
+    """الدائرة - تتبع مديرية واحدة"""
     directorate = models.ForeignKey(
         Directorate, on_delete=models.CASCADE,
         related_name='departments', verbose_name="المديرية"
@@ -34,7 +34,7 @@ class Department(models.Model):
         verbose_name = "دائرة"
         verbose_name_plural = "الدوائر"
         ordering = ['directorate', 'name']
-        unique_together = ('directorate', 'name')  # ما يتكرر نفس اسم الدائرة بنفس المديرية
+        unique_together = ('directorate', 'name')
         indexes = [
             models.Index(fields=['directorate']),
         ]
@@ -44,42 +44,38 @@ class Department(models.Model):
 
 
 # ==========================================================
+# نوع الوثيقة
+# ==========================================================
+
+class DocumentType(models.Model):
+    """نوع الوثيقة - قائمة ثابتة تُدار من لوحة الأدمن"""
+    name = models.CharField(max_length=150, unique=True, verbose_name="نوع الوثيقة")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "نوع وثيقة"
+        verbose_name_plural = "أنواع الوثائق"
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+# ==========================================================
 # المستخدمون
 # ==========================================================
 
 class CustomUser(AbstractUser):
-    """
-    مستخدم النظام.
-
-    نوعان من الحسابات منفصلان تماماً:
-
-    1. أدمن النظام (is_staff=True / is_superuser=True):
-       حساب إداري تقني بحت (مسؤول IT مثلاً)، مهمته الوحيدة إدارة الحسابات
-       وتوزيع الأدوار من لوحة إدارة Django الجاهزة (/admin). هذا الحساب
-       لا ينتمي لأي مديرية أو دائرة، ولا يملك role وظيفي، ولا يملك أي صلاحية
-       لرؤية محتوى الأرشيف نفسه - دوره إداري فقط.
-
-    2. المستخدم الوظيفي (role محدد: موظف/رئيس دائرة/مدير مديرية/مدير عام):
-       حساب يستخدم واجهة النظام (لا لوحة إدارة Django)، ونطاق رؤيته للأرشيف
-       يُحدَّد بالكامل حسب دوره ومكانه التنظيمي (directorate/department)،
-       وفق القاعدة المتفق عليها بملف core/permissions.py.
-
-    الربط بين الدور والمكان التنظيمي هو أساس نظام الصلاحيات بالكامل.
-    """
     class Role(models.TextChoices):
         EMPLOYEE = 'EMP', 'موظف'
         HEAD_OF_DEPT = 'HD', 'رئيس دائرة'
         DIRECTORATE_MANAGER = 'DM', 'مدير مديرية'
         GENERAL_MANAGER = 'GM', 'مدير عام'
 
-    # اختياري عمداً: حساب أدمن النظام (IT) لا يُنسب لأي من الأربعة أدوار الوظيفية
     role = models.CharField(
         max_length=3, choices=Role.choices,
         null=True, blank=True, verbose_name="الدور الوظيفي"
     )
-
-    # مدير عام: بدون مديرية/دائرة محددة (نطاقه كل شي)
-    # أدمن النظام: كذلك بدون مديرية/دائرة، لأنه أصلاً خارج الهيكل الوظيفي
     directorate = models.ForeignKey(
         Directorate, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='users', verbose_name="المديرية"
@@ -105,39 +101,27 @@ class CustomUser(AbstractUser):
 
     @property
     def is_system_admin(self):
-        """حساب إداري تقني بحت (IT) - منفصل تماماً عن الأدوار الوظيفية الأربعة"""
         return self.is_staff or self.is_superuser
 
     def save(self, *args, **kwargs):
-        # اتساق البيانات: الدائرة يجب أن تتبع نفس مديرية المستخدم
         if self.department and self.department.directorate_id != self.directorate_id:
             self.directorate = self.department.directorate
         super().save(*args, **kwargs)
 
 
 # ==========================================================
-# المجلدات - نظام تنظيم متداخل يقدر الموظف ينشئه لترتيب أرشيفه
+# المجلدات
 # ==========================================================
 
 class Folder(models.Model):
-    """
-    مجلد يقدر أي مستخدم وظيفي ينشئه لتنظيم وثائقه (مثلاً "مالية 2026"،
-    وجواه "ميزانية" ← "رواتب شهر 1"). المجلد "يتبع" منشئه ومكانه
-    التنظيمي تماماً كما الوثيقة، وتُطبَّق عليه نفس قواعد الصلاحيات
-    الحاكمة بالكامل (راجع core/permissions.py) - أي أن رؤية المجلد
-    محصورة بمنشئه ومن هو أعلى منه تنظيمياً فقط.
-    """
     name = models.CharField(max_length=255, verbose_name="اسم المجلد")
     parent = models.ForeignKey(
         'self', on_delete=models.CASCADE, null=True, blank=True,
         related_name='subfolders', verbose_name="المجلد الأب"
     )
-
-    # نفس منطق الوثيقة بالضبط: تلقائي من حساب منشئ المجلد وقت الإنشاء
     directorate = models.ForeignKey(Directorate, on_delete=models.PROTECT, related_name='folders')
     department = models.ForeignKey(Department, on_delete=models.PROTECT, related_name='folders')
     created_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, related_name='folders')
-
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -155,7 +139,6 @@ class Folder(models.Model):
         return self.name
 
     def has_content(self):
-        """يُستخدم لمنع حذف مجلد يحتوي وثائق أو مجلدات فرعية غير فارغة"""
         return self.documents.exists() or self.subfolders.exists()
 
 
@@ -193,8 +176,15 @@ class Document(models.Model):
     file = models.FileField(upload_to='archive/%Y/%m/', verbose_name="الملف")
 
     document_date = models.DateField(verbose_name="تاريخ الوثيقة")
+    export_date = models.DateField(null=True, blank=True, verbose_name="تاريخ التصدير/الختم")
     document_year = models.PositiveIntegerField(editable=False, default=0, verbose_name="سنة الوثيقة")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاريخ الرفع")
+
+    document_type = models.ForeignKey(
+        DocumentType, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='documents', verbose_name="نوع الوثيقة"
+    )
 
     tags = models.ManyToManyField(Tag, blank=True, related_name='documents', verbose_name="الوسوم")
     source = models.CharField(max_length=10, choices=Source.choices, verbose_name="المصدر")
@@ -205,6 +195,15 @@ class Document(models.Model):
     )
     external_entity_name = models.CharField(
         max_length=255, null=True, blank=True, verbose_name="اسم الجهة الخارجية"
+    )
+
+    # الجهة المحولة إليها: نص حر (اختياري)
+    destination_entity_name = models.CharField(
+        max_length=255, null=True, blank=True, verbose_name="الجهة المحولة إليها"
+    )
+
+    diwan_number = models.CharField(
+        max_length=50, null=True, blank=True, verbose_name="رقم الديوان"
     )
 
     folder = models.ForeignKey(
@@ -232,6 +231,7 @@ class Document(models.Model):
             models.Index(fields=['document_number']),
             models.Index(fields=['title']),
             models.Index(fields=['document_date']),
+            models.Index(fields=['export_date']),
             models.Index(fields=['source']),
             models.Index(fields=['directorate']),
             models.Index(fields=['department']),
@@ -239,6 +239,9 @@ class Document(models.Model):
             models.Index(fields=['folder']),
             models.Index(fields=['document_year']),
             models.Index(fields=['created_at']),
+            models.Index(fields=['document_type']),
+            models.Index(fields=['destination_entity_name']),
+            models.Index(fields=['diwan_number']),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -270,6 +273,56 @@ class Document(models.Model):
 
 
 # ==========================================================
+# الملفات المرفقة
+# ==========================================================
+
+class DocumentAttachment(models.Model):
+    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name='attachments')
+    file = models.FileField(upload_to='archive/attachments/%Y/%m/', verbose_name="ملف إضافي")
+    uploaded_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "ملف مرفق"
+        verbose_name_plural = "الملفات المرفقة"
+        ordering = ['uploaded_at']
+
+
+# ==========================================================
+# ✅✅✅  جديد: نسخ الوثيقة السابقة  ✅✅✅
+# عند تحديث الملف، تُحفظ النسخة القديمة هنا
+# (لا يُنسخ الملف على القرص، فقط يُسجّل مساره الأصلي. الملف يبقى
+# في مكانه الأصلي على القرص إلى الأبد حسب سياسة الأرشفة)
+# ==========================================================
+
+class DocumentVersion(models.Model):
+    document = models.ForeignKey(
+        Document, on_delete=models.CASCADE,
+        related_name='versions', verbose_name="الوثيقة"
+    )
+    file_name = models.CharField(max_length=500, verbose_name="مسار الملف")
+    original_filename = models.CharField(max_length=255, blank=True, verbose_name="اسم الملف الأصلي")
+    note = models.CharField(max_length=255, blank=True, verbose_name="ملاحظة")
+    uploaded_by = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, null=True,
+        related_name='document_versions', verbose_name="رفعها"
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True, verbose_name="تاريخ الرفع")
+
+    class Meta:
+        verbose_name = "نسخة سابقة"
+        verbose_name_plural = "النسخ السابقة"
+        ordering = ['-uploaded_at']
+        indexes = [
+            models.Index(fields=['document']),
+            models.Index(fields=['uploaded_at']),
+        ]
+
+    def __str__(self):
+        return f"نسخة {self.document.document_number} - {self.uploaded_at:%Y-%m-%d %H:%M}"
+
+
+# ==========================================================
 # التعليقات
 # ==========================================================
 
@@ -293,7 +346,7 @@ class Comment(models.Model):
 
 
 # ==========================================================
-# سجل التدقيق (Audit Log)
+# سجل التدقيق
 # ==========================================================
 
 class AuditLog(models.Model):

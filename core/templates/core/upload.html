@@ -6,7 +6,7 @@
 <div class="card" style="max-width: 550px; margin: 0 auto;">
     <h2 class="section-title">رفع وثيقة جديدة</h2>
 
-    <form method="post" enctype="multipart/form-data">
+    <form method="post" enctype="multipart/form-data" autocomplete="off">
         {% csrf_token %}
         {% if folder %}<input type="hidden" name="folder_id" value="{{ folder.id }}">{% endif %}
 
@@ -16,13 +16,27 @@
         <label for="id_document_number">رقم الوثيقة</label>
         <input type="text" id="id_document_number" name="document_number" required>
 
+        <label for="id_diwan_number">رقم الديوان <span style="display:inline-block; margin-right:6px; padding:2px 8px; font-size:10px; font-weight:600; color:#7b8794; background:#f1f3f2; border:1px solid #dce1df; border-radius:999px;">اختياري</span></label>
+        <input type="text" id="id_diwan_number" name="diwan_number">
+
         <label for="id_title">اسم الوثيقة</label>
         <input type="text" id="id_title" name="title" required>
+
+        <label for="id_document_type">نوع الوثيقة <span style="display:inline-block; margin-right:6px; padding:2px 8px; font-size:10px; font-weight:600; color:#7b8794; background:#f1f3f2; border:1px solid #dce1df; border-radius:999px;">اختياري</span></label>
+        <select id="id_document_type" name="document_type_id">
+            <option value="">-- اختر النوع --</option>
+            {% for dt in document_types %}
+            <option value="{{ dt.id }}">{{ dt.name }}</option>
+            {% endfor %}
+        </select>
 
         <label for="id_document_date">التاريخ</label>
         <input type="date" id="id_document_date" name="document_date" required>
 
-        <label for="id_tags">الوسوم (افصل بينها بفاصلة)</label>
+        <label for="id_export_date">تاريخ التصدير/الختم <span style="display:inline-block; margin-right:6px; padding:2px 8px; font-size:10px; font-weight:600; color:#7b8794; background:#f1f3f2; border:1px solid #dce1df; border-radius:999px;">اختياري</span></label>
+        <input type="date" id="id_export_date" name="export_date">
+
+        <label for="id_tags">الوسوم <span style="display:inline-block; margin-right:6px; padding:2px 8px; font-size:10px; font-weight:600; color:#7b8794; background:#f1f3f2; border:1px solid #dce1df; border-radius:999px;">اختياري</span></label>
         <input type="text" id="id_tags" name="tags" placeholder="مثال: مالية, 2026, عاجل">
 
         {% if departments %}
@@ -56,6 +70,9 @@
             <input type="text" id="id_external_entity" name="external_entity_name" placeholder="مثال: وزارة الداخلية، شركة كذا...">
         </div>
 
+        <label for="id_destination_entity_name">الجهة المحولة إليها <span style="display:inline-block; margin-right:6px; padding:2px 8px; font-size:10px; font-weight:600; color:#7b8794; background:#f1f3f2; border:1px solid #dce1df; border-radius:999px;">اختياري</span></label>
+        <input type="text" id="id_destination_entity_name" name="destination_entity_name" placeholder="اكتب اسم الجهة المحولة إليها">
+
         <button type="submit" class="btn btn-primary btn-block">رفع الوثيقة</button>
     </form>
 </div>
@@ -63,4 +80,17 @@
 
 {% block extra_js %}
 <script src="{% static 'core/js/source_field_toggle.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var docDate = document.getElementById('id_document_date');
+    var exportDate = document.getElementById('id_export_date');
+    if (docDate && exportDate) {
+        docDate.addEventListener('change', function() {
+            if (!exportDate.value) {
+                exportDate.value = docDate.value;
+            }
+        });
+    }
+});
+</script>
 {% endblock %}

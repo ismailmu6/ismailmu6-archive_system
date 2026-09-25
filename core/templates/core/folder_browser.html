@@ -9,42 +9,53 @@
 
 <div class="toolbar">
     {% if current_folder %}
+        {% if request.user.role != 'GM' %}
         <a href="{% url 'create_folder' %}?parent_id={{ current_folder.id }}" class="btn btn-secondary">
             <i class="fas fa-folder-plus"></i> مجلد فرعي جديد
         </a>
         <a href="{% url 'upload' %}?folder_id={{ current_folder.id }}" class="btn btn-primary">
             <i class="fas fa-upload"></i> رفع وثيقة هنا
         </a>
+        {% endif %}
         {% if can_delete %}
         <a href="{% url 'delete_folder' current_folder.id %}" class="btn btn-danger">
             <i class="fas fa-trash-alt"></i> حذف المجلد
         </a>
         {% endif %}
     {% else %}
+        {% if request.user.role != 'GM' %}
         <a href="{% url 'create_folder' %}" class="btn btn-secondary">
             <i class="fas fa-folder-plus"></i> مجلد جديد
         </a>
         <a href="{% url 'upload' %}" class="btn btn-primary">
             <i class="fas fa-upload"></i> رفع وثيقة
         </a>
+        {% endif %}
     {% endif %}
 </div>
 
+{# ============ المجلدات ============ #}
+{% if folders %}
 <div class="card">
-    <h4 class="section-title"><i class="fas fa-folder"></i> المجلدات</h4>
+    <h4 class="section-title">
+        <i class="fas fa-folder"></i>
+        {% if current_folder %}المجلدات الفرعية{% else %}المجلدات{% endif %}
+    </h4>
     <div class="grid">
         {% for f in folders %}
         <a href="{% url 'folder_detail' f.id %}" class="item">
             <span class="icon"><i class="fas fa-folder"></i></span>
             <span class="name">{{ f.name }}</span>
-            <span class="meta">{{ f.created_by }}</span>
+            <span class="meta">
+                {{ f.doc_count }} وثيقة
+                {% if f.subfolder_count %}
+                    · {{ f.subfolder_count }} مجلد
+                {% endif %}
+            </span>
         </a>
-        {% empty %}
-        <div class="empty">لا توجد مجلدات</div>
         {% endfor %}
     </div>
 
-    <!-- ترقيم المجلدات -->
     {% if folders.has_other_pages %}
     <div class="pagination">
         <span class="step-links">
@@ -65,22 +76,35 @@
     </div>
     {% endif %}
 </div>
+{% endif %}
 
+{# ============ الوثائق ============ #}
+{% if page_obj and page_obj.object_list %}
 <div class="card">
-    <h4 class="section-title"><i class="fas fa-file"></i> الوثائق {% if current_folder %}هنا{% endif %}</h4>
+    <h4 class="section-title">
+        <i class="fas fa-file"></i>
+        {% if current_folder %}
+            الوثائق داخل: {{ current_folder.name }}
+        {% else %}
+            الوثائق غير المصنفة
+        {% endif %}
+    </h4>
     <div class="grid">
         {% for doc in page_obj %}
         <a href="{% url 'document_detail' doc.id %}" class="item">
             <span class="icon"><i class="fas fa-file-alt"></i></span>
             <span class="name">{{ doc.title }}</span>
-            <span class="meta">{{ doc.full_number }}</span>
+            <span class="meta">
+                {{ doc.full_number }}
+                {% if doc.diwan_number %}
+                    <span style="color:#b9a779; margin: 0 4px;">•</span>
+                    <span style="color:#8a784c;">ديوان: {{ doc.diwan_number }}</span>
+                {% endif %}
+            </span>
         </a>
-        {% empty %}
-        <div class="empty">لا توجد وثائق</div>
         {% endfor %}
     </div>
 
-    <!-- ترقيم الوثائق -->
     {% if page_obj.has_other_pages %}
     <div class="pagination">
         <span class="step-links">
@@ -101,4 +125,20 @@
     </div>
     {% endif %}
 </div>
+{% endif %}
+
+{# ============ حالة الفراغ الكامل ============ #}
+{% if not folders and not page_obj.object_list %}
+<div class="card">
+    <div class="empty" style="padding: 40px 20px; text-align: center;">
+        <i class="fas fa-folder-open" style="font-size: 42px; color: #cfd7d3; display: block; margin-bottom: 12px;"></i>
+        {% if current_folder %}
+            هذا المجلد فارغ حاليًا.
+        {% else %}
+            الأرشيف فارغ حاليًا.
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 {% endblock %}

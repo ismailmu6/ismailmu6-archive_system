@@ -1,0 +1,36 @@
+{% extends 'core/base.html' %}
+{% block title %}تحديث ملف الوثيقة - نظام الأرشفة{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 550px; margin: 0 auto; padding: 16px 18px;">
+    <h2 class="section-title" style="margin-bottom: 12px;">🔄 تحديث ملف الوثيقة</h2>
+
+    <div style="padding: 10px 12px; background: #eef7f3; border: 1px solid #b8d8cb; border-radius: 6px; margin-bottom: 10px; color: #0f4a42; font-size: 13px;">
+        <strong>الوثيقة:</strong> {{ document.full_number }} — {{ document.title }}
+    </div>
+
+    <div style="padding: 10px 12px; background:#f8f3e7; border:1px solid #dfcfaa; color:#705d32; border-radius: 6px; margin-bottom: 12px; font-size: 13px;">
+        ℹ️ عند رفع ملف جديد، سيُحفظ الملف الحالي كنسخة سابقة ويمكن الوصول إليه لاحقًا. الملف القديم يبقى على القرص.
+    </div>
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <div style="margin-bottom: 10px;">
+            <label for="id_file" style="display:block; font-size: 13px; margin-bottom: 4px; font-weight: 700;">الملف الجديد *</label>
+            <input type="file" id="id_file" name="file" required style="width: 100%; min-height: 38px;">
+        </div>
+
+        <div style="margin-bottom: 12px;">
+            <label for="id_note" style="display:block; font-size: 13px; margin-bottom: 4px; font-weight: 700;">ملاحظة (اختياري)</label>
+            <input type="text" id="id_note" name="note" placeholder="مثال: نسخة مصححة، إضافة توقيع..." maxlength="255"
+                   style="width: 100%; min-height: 38px; padding: 6px 8px;">
+        </div>
+
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="submit" class="btn btn-primary" style="min-height: 40px; flex: 1;">تحديث الملف</button>
+            <a href="{% url 'document_detail' document.id %}" class="btn btn-secondary" style="min-height: 40px; flex: 1; text-align: center;">إلغاء</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
