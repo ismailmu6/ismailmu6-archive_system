@@ -62,6 +62,12 @@
             <input type="text" id="id_keyword" name="keyword" value="{{ request.GET.keyword }}" placeholder="وسم أو كلمة مفتاحية">
         </div>
 
+        <!-- ✅✅✅ جديد: فلتر حالة الوثيقة ✅✅✅ -->
+        <div class="field">
+            <label for="id_status">حالة الوثيقة</label>
+            <input type="text" id="id_status" name="status" value="{{ request.GET.status }}" placeholder="مثال: قيد المراجعة، تم الإنجاز...">
+        </div>
+
         <div class="field">
             <label for="id_source">المصدر</label>
             <select id="id_source" name="source" data-source-toggle>
@@ -94,8 +100,14 @@
 
 {% if has_searched %}
     {% if page_obj and page_obj.object_list %}
-        <div class="results-info">
-            تم العثور على {{ page_obj.paginator.count }} نتيجة
+        <div class="results-info" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+            <span>تم العثور على {{ page_obj.paginator.count }} نتيجة</span>
+            <!-- ✅✅✅ جديد: زر تصدير Excel ✅✅✅ -->
+            <a href="{% url 'export_documents_excel' %}{% if query_string %}?{{ query_string }}{% endif %}"
+               class="btn btn-primary"
+               style="background:#1f6b4f; display:inline-flex; align-items:center; gap:6px;">
+                📥 تصدير Excel
+            </a>
         </div>
         <table>
             <thead>
@@ -110,6 +122,8 @@
                     <th>المصدر</th>
                     <th>الجهة الصادرة</th>
                     <th>الجهة المحولة إليها</th>
+                    <!-- ✅✅✅ جديد: عمود حالة الوثيقة ✅✅✅ -->
+                    <th>حالة الوثيقة</th>
                     <th>المجلد</th>
                     <th>إجراء</th>
                 </tr>
@@ -136,6 +150,14 @@
                         {% else %}{{ doc.external_entity_name|default:"—" }}{% endif %}
                     </td>
                     <td>{{ doc.destination_entity_name|default:"—" }}</td>
+                    <!-- ✅✅✅ جديد: عرض الحالة في النتائج ✅✅✅ -->
+                    <td>
+                        {% if doc.status %}
+                            <span class="badge" style="background:#f8f3e7; color:#705d32; border:1px solid #dfcfaa; font-weight:600;">{{ doc.status }}</span>
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
                     <td>
                         {% if doc.folder %}
                             {{ doc.folder.name }}

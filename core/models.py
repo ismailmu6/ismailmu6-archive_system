@@ -1,6 +1,97 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import RegexValidator
+from django.utils import timezone
+import os
+
+from .utils.files import sanitize_folder_name
+
+
+# ==========================================================
+# دالة تسمية ملف الوثيقة (تُستخدم فقط عند رفع ملف جديد)
+# ==========================================================
+# ملاحظة مهمة:
+# هذه الدالة تُطبَّق فقط على الملفات الجديدة. الملفات القديمة التي
+# رُفعت قبل هذا التعديل تبقى في مسارها القديم ولا تتأثر إطلاقاً، لأن
+# Django يحفظ مسار كل ملف نصيًّا في قاعدة البيانات.
+# ==========================================================
+
+def upload_document_path(instance, filename):
+    """
+    تسمية ملف الوثيقة برقم الوثيقة + تنظيم حسب المديرية/الدائرة/المجلد/السنة.
+    البنية:
+      - داخل مجلد:   archive/<directorate_name>/<department_name>/<folder_name>/<year>/<number>.<ext>
+      - غير مصنف:    archive/<directorate_name>/<department_name>/uncategorized/<year>/<number>.<ext>
+
+    في حال تكرار الاسم (نفس الرقم بنفس المديرية/السنة)، Django يضيف
+    لاحقة عشوائية تلقائياً (مثل: 2403_AbC123.pdf) دون أي حذف أو تداخل.
+    """
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'bin'
+    # ✅ تنظيف رقم الوثيقة كاملاً من الرموز غير الآمنة
+    doc_num = sanitize_folder_name(
+        str(instance.document_number).replace('/', '-').replace('\\', '-')
+    )
+    new_filename = f"{doc_num}.{ext}"
+
+    year = instance.document_date.year if instance.document_date and hasattr(instance.document_date, 'year') else 'unknown'
+
+    # أسماء واضحة للمديرية والدائرة
+    dir_name = sanitize_folder_name(instance.directorate.name) if instance.directorate else 'unknown_directorate'
+    dept_name = sanitize_folder_name(instance.department.name) if instance.department else 'unknown_department'
+
+    if instance.folder_id:
+        folder_name = sanitize_folder_name(instance.folder.name) if instance.folder else f"folder_{instance.folder_id}"
+        return os.path.join('archive', dir_name, dept_name, folder_name, str(year), new_filename)
+    else:
+        return os.path.join('archive', dir_name, dept_name, 'uncategorized', str(year), new_filename)
+
+
+def upload_attachment_path(instance, filename):
+    """
+    تسمية الملف المرفق برقم الوثيقة + عنوانها + رقم تسلسلي، وتنظيم
+    المسار حسب المديرية/الدائرة/رقم_الوثيقة_السنة.
+
+    البنية:
+      archive/attachments/<directorate>/<department>/<number>_<year>/<number>_<title>_<n>.<ext>
+
+    المثال:
+      archive/attachments/معلوماتية/الاول/741258_2026/741258_وثيقة_تجربة_1.pdf
+
+    - رقم الوثيقة يظهر في اسم المجلد واسم الملف (يسهل البحث والفرز).
+    - السنة تظهر في اسم المجلد.
+    - الرقم التسلسلي يزيد تلقائياً مع كل مرفق جديد لنفس الوثيقة.
+    - في حال تداخل نادر (مثلاً رفع متزامن)، Django يضيف لاحقة عشوائية
+      تلقائياً دون أي حذف أو استبدال.
+    """
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'bin'
+    doc = instance.document
+
+    # المديرية والدائرة
+    dir_name = sanitize_folder_name(doc.directorate.name) if doc.directorate else 'unknown_directorate'
+    dept_name = sanitize_folder_name(doc.department.name) if doc.department else 'unknown_department'
+
+    # ✅ تنظيف رقم الوثيقة كاملاً من الرموز غير الآمنة
+    doc_num = sanitize_folder_name(
+        str(doc.document_number).replace('/', '-').replace('\\', '-')
+    )
+
+    # السنة (من document_year أو من document_date)
+    year = doc.document_year or (doc.document_date.year if doc.document_date else 'unknown')
+
+    # مجلد فرعي فريد لكل وثيقة: <رقم>_<سنة>
+    doc_folder = f"{doc_num}_{year}"
+
+    # اسم الملف = رقم الوثيقة + عنوان الوثيقة + رقم تسلسلي
+    title_base = sanitize_folder_name(doc.title)[:80] or 'attachment'
+
+    # عدّاد تسلسلي: عدد المرفقات الحالية لنفس الوثيقة + 1
+    qs = DocumentAttachment.objects.filter(document=doc)
+    if instance.pk:
+        qs = qs.exclude(pk=instance.pk)
+    counter = qs.count() + 1
+
+    new_filename = f"{doc_num}_{title_base}_{counter}.{ext}"
+    return os.path.join('archive', 'attachments', dir_name, dept_name, doc_folder, new_filename)
 
 
 # ==========================================================
@@ -173,7 +264,11 @@ class Document(models.Model):
         verbose_name="رقم الوثيقة"
     )
     title = models.CharField(max_length=255, verbose_name="اسم الوثيقة")
-    file = models.FileField(upload_to='archive/%Y/%m/', verbose_name="الملف")
+
+    # ✅ تم تغيير upload_to من 'archive/%Y/%m/' إلى الدالة الجديدة
+    # ملاحظة: الملفات القديمة لا تتأثر — Django يحتفظ بمسار كل ملف
+    # نصيًّا في قاعدة البيانات، والتغيير يطبَّق على الرفع الجديد فقط.
+    file = models.FileField(upload_to=upload_document_path, verbose_name="الملف")
 
     document_date = models.DateField(verbose_name="تاريخ الوثيقة")
     export_date = models.DateField(null=True, blank=True, verbose_name="تاريخ التصدير/الختم")
@@ -197,13 +292,17 @@ class Document(models.Model):
         max_length=255, null=True, blank=True, verbose_name="اسم الجهة الخارجية"
     )
 
-    # الجهة المحولة إليها: نص حر (اختياري)
     destination_entity_name = models.CharField(
         max_length=255, null=True, blank=True, verbose_name="الجهة المحولة إليها"
     )
 
     diwan_number = models.CharField(
         max_length=50, null=True, blank=True, verbose_name="رقم الديوان"
+    )
+
+    # ✅✅✅ جديد: حالة الوثيقة (نص حر) ✅✅✅
+    status = models.CharField(
+        max_length=100, null=True, blank=True, verbose_name="حالة الوثيقة"
     )
 
     folder = models.ForeignKey(
@@ -242,6 +341,8 @@ class Document(models.Model):
             models.Index(fields=['document_type']),
             models.Index(fields=['destination_entity_name']),
             models.Index(fields=['diwan_number']),
+            # ✅✅✅ جديد: فهرس لحالة الوثيقة ✅✅✅
+            models.Index(fields=['status']),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -278,7 +379,10 @@ class Document(models.Model):
 
 class DocumentAttachment(models.Model):
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name='attachments')
-    file = models.FileField(upload_to='archive/attachments/%Y/%m/', verbose_name="ملف إضافي")
+
+    # ✅ تغيير upload_to للمرفقات (يُطبَّق على الرفع الجديد فقط)
+    file = models.FileField(upload_to=upload_attachment_path, verbose_name="ملف إضافي")
+
     uploaded_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
@@ -289,10 +393,7 @@ class DocumentAttachment(models.Model):
 
 
 # ==========================================================
-# ✅✅✅  جديد: نسخ الوثيقة السابقة  ✅✅✅
-# عند تحديث الملف، تُحفظ النسخة القديمة هنا
-# (لا يُنسخ الملف على القرص، فقط يُسجّل مساره الأصلي. الملف يبقى
-# في مكانه الأصلي على القرص إلى الأبد حسب سياسة الأرشفة)
+# نسخ الوثيقة السابقة
 # ==========================================================
 
 class DocumentVersion(models.Model):

@@ -5,12 +5,18 @@ from django.contrib.auth import authenticate, login as auth_login, logout as aut
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponse
 from django.db.models import Q, Count
 from django.utils.dateparse import parse_date
+from django.utils import timezone as tz
 from django.core.paginator import Paginator
 from django.db import IntegrityError
 from django.contrib.postgres.search import SearchVector, SearchQuery
+
+import openpyxl
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.utils import get_column_letter
+from urllib.parse import quote
 
 from .models import (
     Document, Comment, Tag, AuditLog, Folder, Directorate, Department,
@@ -22,6 +28,7 @@ from .permissions import (
     can_delete_folder,
 )
 from .audit import log_action
+from .utils.files import sanitize_folder_name
 
 
 # ==========================================================
@@ -82,7 +89,7 @@ def folder_list(request):
     folders_list = get_visible_folders(request.user).filter(parent__isnull=True).select_related('created_by').annotate(
         doc_count=Count('documents', distinct=True),
         subfolder_count=Count('subfolders', distinct=True),
-    )
+    ).order_by('name')
     documents_list = get_visible_documents(request.user).filter(folder__isnull=True).select_related('department', 'directorate', 'uploaded_by')
 
     folders_paginator = Paginator(folders_list, 25)
@@ -109,7 +116,7 @@ def folder_detail(request, folder_id):
     subfolders_list = get_visible_folders(request.user).filter(parent_id=folder.id).select_related('created_by').annotate(
         doc_count=Count('documents', distinct=True),
         subfolder_count=Count('subfolders', distinct=True),
-    )
+    ).order_by('name')
     documents_list = get_visible_documents(request.user).filter(folder_id=folder.id).select_related('department', 'directorate', 'uploaded_by')
 
     folders_paginator = Paginator(subfolders_list, 25)
@@ -272,6 +279,8 @@ def upload_document(request):
         destination_entity_name = request.POST.get('destination_entity_name', '').strip()
         diwan_number = request.POST.get('diwan_number', '').strip()
 
+        status = request.POST.get('status', '').strip()
+
         if not (document_number and title and document_date and source and uploaded_file):
             return _upload_error(request, folder, 'الرجاء تعبئة كل الحقول المطلوبة واختيار ملف.')
 
@@ -322,6 +331,7 @@ def upload_document(request):
                 external_entity_name=external_entity_name if source == Document.Source.EXTERNAL else '',
                 destination_entity_name=destination_entity_name or None,
                 diwan_number=diwan_number or None,
+                status=status or None,
                 folder=folder,
                 directorate=request.user.directorate,
                 department=department,
@@ -368,8 +378,13 @@ def _upload_error(request, folder, message, departments=None):
 # البحث
 # ==========================================================
 
-@login_required
-def search_documents(request):
+def _apply_search_filters(documents, request):
+    """
+    تُطبّق كل فلاتر البحث على queryset — تُستدعى من:
+    - search_documents
+    - export_documents_excel
+    لتضمن أن الاثنين يعطيان نفس النتائج دائماً.
+    """
     document_number = request.GET.get('document_number', '').strip()
     name = request.GET.get('name', '').strip()
     date_from = request.GET.get('date_from', '').strip()
@@ -383,37 +398,7 @@ def search_documents(request):
     source = request.GET.get('source', '').strip()
     issuing_directorate_id = request.GET.get('issuing_directorate', '').strip()
     external_entity_name = request.GET.get('external_entity_name', '').strip()
-
-    has_search_params = any([
-        document_number,
-        name,
-        date_from,
-        date_to,
-        export_date_from,
-        export_date_to,
-        document_type_id,
-        destination_entity_name,
-        diwan_number,
-        keyword,
-        source,
-        issuing_directorate_id,
-        external_entity_name,
-    ])
-
-    if not has_search_params:
-        context = {
-            'documents': None,
-            'page_obj': None,
-            'has_searched': False,
-            'directorates': Directorate.objects.all(),
-            'document_types': DocumentType.objects.all(),
-            'query_string': '',
-        }
-        return render(request, 'core/search.html', context)
-
-    documents = get_visible_documents(request.user).select_related(
-        'department', 'directorate', 'uploaded_by', 'folder', 'document_type'
-    )
+    status = request.GET.get('status', '').strip()
 
     if document_number:
         documents = documents.filter(document_number__icontains=document_number)
@@ -440,9 +425,16 @@ def search_documents(request):
     if diwan_number:
         documents = documents.filter(diwan_number__icontains=diwan_number)
 
+    if status:
+        documents = documents.filter(status__icontains=status)
+
     if keyword:
         documents = documents.annotate(
-            search=SearchVector('title', 'document_number', 'external_entity_name', 'tags__name', 'diwan_number', 'destination_entity_name')
+            search=SearchVector(
+                'title', 'document_number', 'external_entity_name',
+                'tags__name', 'diwan_number', 'destination_entity_name',
+                'status',
+            )
         ).filter(
             Q(search=SearchQuery(keyword)) |
             Q(tags__name__icontains=keyword) |
@@ -458,6 +450,50 @@ def search_documents(request):
     elif source == Document.Source.EXTERNAL and external_entity_name:
         documents = documents.filter(external_entity_name__icontains=external_entity_name)
 
+    return documents
+
+
+@login_required
+def search_documents(request):
+    # نقرأ الفلاتر أولاً لمعرفة إن كان هناك بحث
+    document_number = request.GET.get('document_number', '').strip()
+    name = request.GET.get('name', '').strip()
+    date_from = request.GET.get('date_from', '').strip()
+    date_to = request.GET.get('date_to', '').strip()
+    export_date_from = request.GET.get('export_date_from', '').strip()
+    export_date_to = request.GET.get('export_date_to', '').strip()
+    document_type_id = request.GET.get('document_type_id', '').strip()
+    destination_entity_name = request.GET.get('destination_entity_name', '').strip()
+    diwan_number = request.GET.get('diwan_number', '').strip()
+    keyword = request.GET.get('keyword', '').strip()
+    source = request.GET.get('source', '').strip()
+    issuing_directorate_id = request.GET.get('issuing_directorate', '').strip()
+    external_entity_name = request.GET.get('external_entity_name', '').strip()
+    status = request.GET.get('status', '').strip()
+
+    has_search_params = any([
+        document_number, name, date_from, date_to,
+        export_date_from, export_date_to, document_type_id,
+        destination_entity_name, diwan_number, keyword,
+        source, issuing_directorate_id, external_entity_name, status,
+    ])
+
+    if not has_search_params:
+        context = {
+            'documents': None,
+            'page_obj': None,
+            'has_searched': False,
+            'directorates': Directorate.objects.all(),
+            'document_types': DocumentType.objects.all(),
+            'query_string': '',
+        }
+        return render(request, 'core/search.html', context)
+
+    # ✅ استدعاء واحد لكل الفلاتر
+    documents = get_visible_documents(request.user).select_related(
+        'department', 'directorate', 'uploaded_by', 'folder', 'document_type'
+    )
+    documents = _apply_search_filters(documents, request)
     documents = documents.order_by('-document_date', '-id')
 
     paginator = Paginator(documents, 25)
@@ -476,6 +512,186 @@ def search_documents(request):
         'query_string': query_string,
     }
     return render(request, 'core/search.html', context)
+
+
+# ==========================================================
+# ✅✅✅  تصدير Excel (شامل المجلدات الفرعية)  ✅✅✅
+# ==========================================================
+
+def _get_all_folder_ids_recursive(folder_id):
+    """
+    ترجع قائمة بكل معرفات المجلدات: المجلد نفسه + كل المجلدات الفرعية
+    (بشكل تعاقبي، أي الجيل الأول والثاني والثالث... إلى ما لا نهاية).
+    """
+    ids = [folder_id]
+    queue = [folder_id]
+    while queue:
+        current = queue.pop()
+        child_ids = list(
+            Folder.objects.filter(parent_id=current).values_list('id', flat=True)
+        )
+        for cid in child_ids:
+            ids.append(cid)
+            queue.append(cid)
+    return ids
+
+
+# ✅ حد الإشعار: عند تجاوز هذا العدد، يظهر تحذير للمستخدم قبل التصدير
+EXPORT_WARNING_THRESHOLD = 10000
+
+
+@login_required
+def export_documents_excel(request):
+    """
+    تصدير نتائج البحث إلى ملف Excel (xlsx).
+    - يستخدم نفس فلاتر البحث في search_documents تماماً.
+    - عند تجاوز 10,000 وثيقة → يظهر تحذير للمستخدم قبل التنفيذ.
+    - يقبل معاملاً إضافياً `folder_id` لتقييد التصدير بمجلد معين.
+    - عند تمرير `folder_id` → يشمل المجلد + كل المجلدات الفرعية تحته.
+    - عند تمرير `folder_id=none` → فقط الوثائق غير المصنفة.
+    - لا يحتوي على الملف الأصلي ولا المرفقات — فقط بيانات وصفية.
+    """
+    # ✅ فلتر المجلد (خاص بالتصدير فقط، لا علاقة له بفلاتر البحث)
+    folder_id = request.GET.get('folder_id', '').strip()
+
+    # ✅ queryset أساسي
+    documents = get_visible_documents(request.user).select_related(
+        'department', 'directorate', 'uploaded_by', 'folder', 'document_type',
+        'issuing_directorate',
+    ).prefetch_related('tags')
+
+    # ✅ فلتر المجلد أولاً (شامل المجلدات الفرعية)
+    if folder_id:
+        if folder_id == 'none':
+            documents = documents.filter(folder__isnull=True)
+        else:
+            try:
+                fid = int(folder_id)
+                folder_ids = _get_all_folder_ids_recursive(fid)
+                documents = documents.filter(folder_id__in=folder_ids)
+            except (ValueError, TypeError):
+                pass
+
+    # ✅ ثم كل فلاتر البحث المشتركة (نفس الدالة المستخدمة في الشاشة)
+    documents = _apply_search_filters(documents, request)
+    documents = documents.order_by('-document_date', '-id')
+
+    # ✅✅✅ حماية: إشعار عند تجاوز الحد الأقصى ✅✅✅
+    total_count = documents.count()
+
+    if total_count > EXPORT_WARNING_THRESHOLD and request.GET.get('confirmed') != '1':
+        context = {
+            'total_count': total_count,
+            'threshold': EXPORT_WARNING_THRESHOLD,
+            'query_string': request.GET.urlencode(),
+        }
+        return render(request, 'core/confirm_export.html', context)
+
+    # ✅✅✅ كل بناء الملف داخل try لضمان التعامل مع أي خطأ ✅✅✅
+    try:
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'الوثائق'
+        ws.sheet_view.rightToLeft = True
+
+        headers = [
+            'رقم الوثيقة',
+            'السنة',
+            'الرقم الكامل (رقم/سنة)',
+            'اسم الوثيقة',
+            'نوع الوثيقة',
+            'تاريخ الوثيقة',
+            'تاريخ التصدير/الختم',
+            'رقم الديوان',
+            'المصدر',
+            'المديرية الصادرة عنها',
+            'الجهة الخارجية',
+            'الجهة المحولة إليها',
+            'الوسوم',
+            'حالة الوثيقة',
+            'المديرية',
+            'الدائرة',
+            'المجلد',
+            'رفعها',
+            'تاريخ الرفع',
+        ]
+
+        header_font = Font(bold=True, color='FFFFFF', size=12)
+        header_fill = PatternFill(start_color='0F4A42', end_color='0F4A42', fill_type='solid')
+        header_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        data_align = Alignment(horizontal='right', vertical='center', wrap_text=True)
+        thin = Side(border_style='thin', color='D0D0D0')
+        border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+        for col_idx, h in enumerate(headers, start=1):
+            c = ws.cell(row=1, column=col_idx, value=h)
+            c.font = header_font
+            c.fill = header_fill
+            c.alignment = header_align
+            c.border = border
+
+        for row_idx, doc in enumerate(documents, start=2):
+            tags_str = ', '.join(t.name for t in doc.tags.all())
+            row = [
+                doc.document_number,
+                doc.document_year,
+                doc.full_number,
+                doc.title,
+                doc.document_type.name if doc.document_type else '',
+                doc.document_date.strftime('%Y-%m-%d') if doc.document_date else '',
+                doc.export_date.strftime('%Y-%m-%d') if doc.export_date else '',
+                doc.diwan_number or '',
+                doc.get_source_display(),
+                doc.issuing_directorate.name if doc.issuing_directorate else '',
+                doc.external_entity_name or '',
+                doc.destination_entity_name or '',
+                tags_str,
+                doc.status or '',
+                doc.directorate.name if doc.directorate else '',
+                doc.department.name if doc.department else '',
+                doc.folder.name if doc.folder else 'غير مصنف',
+                str(doc.uploaded_by) if doc.uploaded_by else '',
+                doc.created_at.strftime('%Y-%m-%d %H:%M') if doc.created_at else '',
+            ]
+            for col_idx, val in enumerate(row, start=1):
+                c = ws.cell(row=row_idx, column=col_idx, value=val)
+                c.alignment = data_align
+                c.border = border
+
+        column_widths = [14, 8, 18, 35, 16, 14, 16, 12, 10, 22, 22, 22, 25, 18, 18, 18, 20, 22, 18]
+        for i, w in enumerate(column_widths, start=1):
+            ws.column_dimensions[get_column_letter(i)].width = w
+
+        ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
+        ws.freeze_panes = 'A2'
+
+        # اسم الملف
+        folder_part = ''
+        if folder_id and folder_id != 'none':
+            try:
+                f_obj = Folder.objects.filter(id=int(folder_id)).first()
+                if f_obj:
+                    folder_part = f"_{sanitize_folder_name(f_obj.name)}"
+            except (ValueError, TypeError):
+                pass
+        elif folder_id == 'none':
+            folder_part = '_uncategorized'
+
+        filename = f"documents{folder_part}_{tz.now().strftime('%Y-%m-%d_%H-%M')}.xlsx"
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f"attachment; filename*=UTF-8''{quote(filename)}"
+
+        wb.save(response)
+        return response
+
+    except MemoryError:
+        messages.error(request, 'الملف كبير جداً. صغّر نطاق البحث ثم أعد المحاولة.')
+        return redirect('search')
+    except Exception as e:
+        messages.error(request, f'تعذّر إنشاء ملف Excel: {str(e)[:200]}')
+        return redirect('search')
 
 
 # ==========================================================
@@ -556,18 +772,8 @@ def upload_attachment(request, doc_id):
     return redirect('document_detail', doc_id=document.id)
 
 
-# ==========================================================
-# ✅✅✅  حذف مرفق (للمسؤولين فقط)  ✅✅✅
-# ==========================================================
-
 @login_required
 def delete_attachment(request, attachment_id):
-    """
-    حذف ملف مرفق. متاح فقط للمسؤولين (رئيس دائرة / مدير مديرية / مدير عام)
-    ضمن نطاقهم. الموظف العادي لا يستطيع الحذف.
-    ملاحظة: نحذف سجل قاعدة البيانات فقط، الملف الفعلي يبقى على القرص
-    (سياسة الأرشفة طويلة الأمد).
-    """
     attachment = get_object_or_404(DocumentAttachment, id=attachment_id)
     document = attachment.document
 
@@ -585,19 +791,8 @@ def delete_attachment(request, attachment_id):
     return redirect('document_detail', doc_id=document.id)
 
 
-# ==========================================================
-# ✅✅✅  جديد: استبدال مرفق  ✅✅✅
-# ==========================================================
-
 @login_required
 def replace_attachment(request, attachment_id):
-    """
-    استبدال ملف مرفق بملف جديد (تحديث المحتوى).
-    متاح لصاحب الوثيقة (الموظف) وللمسؤولين ضمن نطاقهم.
-
-    الملف القديم يبقى على القرص وفقًا لسياسة الأرشفة، ويتم فقط تحديث
-    سجل قاعدة البيانات ليشير إلى الملف الجديد.
-    """
     attachment = get_object_or_404(DocumentAttachment, id=attachment_id)
     document = attachment.document
 
@@ -618,18 +813,8 @@ def replace_attachment(request, attachment_id):
     return redirect('document_detail', doc_id=document.id)
 
 
-# ==========================================================
-# ✅✅✅  جديد: تحديث ملف الوثيقة مع حفظ النسخة القديمة  ✅✅✅
-# ==========================================================
-
 @login_required
 def update_document_file(request, doc_id):
-    """
-    تحديث ملف الوثيقة بنسخة جديدة.
-    - متاح لكل من يملك can_edit_document (الموظف صاحب الوثيقة + المسؤولين).
-    - نحفظ مرجع النسخة القديمة في DocumentVersion (بدون نسخ الملف).
-    - الملف القديم يبقى على القرص في مكانه الأصلي.
-    """
     document = get_object_or_404(Document, id=doc_id)
 
     if not can_edit_document(request.user, document):
@@ -643,7 +828,6 @@ def update_document_file(request, doc_id):
             messages.error(request, 'الرجاء اختيار ملف جديد.')
             return render(request, 'core/update_document_file.html', {'document': document})
 
-        # نسجّل مرجع الملف القديم قبل استبداله (الملف يبقى على القرص)
         if document.file:
             DocumentVersion.objects.create(
                 document=document,
@@ -653,7 +837,6 @@ def update_document_file(request, doc_id):
                 uploaded_by=request.user,
             )
 
-        # نستبدل الملف
         document.file = new_file
         document.save()
 
@@ -687,6 +870,7 @@ def edit_document(request, doc_id):
         destination_entity_name = request.POST.get('destination_entity_name', '').strip()
         diwan_number = request.POST.get('diwan_number', '').strip()
         tags_raw = request.POST.get('tags', '')
+        status = request.POST.get('status', '').strip()
 
         if not (title and document_number and document_date and source):
             messages.error(request, 'الرجاء تعبئة جميع الحقول المطلوبة.')
@@ -724,6 +908,7 @@ def edit_document(request, doc_id):
         document.export_date = parse_date(export_date) if export_date else None
         document.diwan_number = diwan_number or None
         document.source = source
+        document.status = status or None
 
         if document_type_id:
             try:
@@ -806,3 +991,47 @@ def add_comment(request, doc_id):
             Comment.objects.create(document=document, text=text, created_by=request.user)
 
     return redirect('document_detail', doc_id=document.id)
+
+
+# ==========================================================
+# تغيير كلمة المرور
+# ==========================================================
+
+@login_required
+def change_password(request):
+    from django.contrib.auth.password_validation import validate_password
+    from django.core.exceptions import ValidationError
+
+    if request.method == 'POST':
+        old_password = request.POST.get('old_password', '')
+        new_password = request.POST.get('new_password', '')
+        confirm_password = request.POST.get('confirm_password', '')
+
+        if not request.user.check_password(old_password):
+            messages.error(request, 'كلمة المرور الحالية غير صحيحة.')
+            return render(request, 'core/change_password.html')
+
+        if new_password != confirm_password:
+            messages.error(request, 'كلمتا المرور الجديدتان غير متطابقتين.')
+            return render(request, 'core/change_password.html')
+
+        try:
+            validate_password(new_password, user=request.user)
+        except ValidationError as e:
+            for msg in e.messages:
+                messages.error(request, msg)
+            return render(request, 'core/change_password.html')
+
+        if old_password == new_password:
+            messages.error(request, 'كلمة المرور الجديدة يجب أن تكون مختلفة عن الحالية.')
+            return render(request, 'core/change_password.html')
+
+        request.user.set_password(new_password)
+        request.user.save()
+
+        auth_login(request, request.user)
+
+        messages.success(request, 'تم تغيير كلمة المرور بنجاح.')
+        return redirect('dashboard')
+
+    return render(request, 'core/change_password.html')

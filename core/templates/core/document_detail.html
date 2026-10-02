@@ -37,6 +37,14 @@
                 <span class="badge badge-tag">{{ tag.name }}</span>
             {% endfor %}
         </div>
+        <!-- ✅✅✅ جديد: عرض حالة الوثيقة ✅✅✅ -->
+        <div><span style="font-weight:700; color:#52606d;">حالة الوثيقة:</span>
+            {% if document.status %}
+                <span class="badge" style="background:#f8f3e7; color:#705d32; border:1px solid #dfcfaa; font-weight:600;">{{ document.status }}</span>
+            {% else %}
+                غير محددة
+            {% endif %}
+        </div>
         <div><span style="font-weight:700; color:#52606d;">رفعها:</span> {{ document.uploaded_by }}</div>
     </div>
 

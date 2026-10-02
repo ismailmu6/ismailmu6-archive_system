@@ -22,7 +22,15 @@ urlpatterns = [
     path('document/<int:doc_id>/preview/', views.preview_document, name='preview_document'),
     path('document/<int:doc_id>/upload_attachment/', views.upload_attachment, name='upload_attachment'),
 
-    # ✅✅✅ جديد: حذف مرفق (للمسؤولين فقط) ✅✅✅
+    # ✅ حذف مرفق (للمسؤولين فقط)
     path('attachment/<int:attachment_id>/delete/', views.delete_attachment, name='delete_attachment'),
+
+    # ✅ استبدال مرفق
+    path('attachment/<int:attachment_id>/replace/', views.replace_attachment, name='replace_attachment'),
+
     path('document/<int:doc_id>/update-file/', views.update_document_file, name='update_document_file'),
+    path('change-password/', views.change_password, name='change_password'),
+
+    # ✅✅✅ جديد: تصدير Excel ✅✅✅
+    path('search/export-excel/', views.export_documents_excel, name='export_documents_excel'),
 ]

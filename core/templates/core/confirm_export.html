@@ -1,0 +1,60 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}تأكيد التصدير{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+  <div class="row justify-content-center">
+    <div class="col-md-8">
+
+      <div class="card shadow-sm border-warning">
+        <div class="card-header bg-warning text-dark">
+          <h4 class="mb-0">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            تنبيه: عدد الوثائق كبير
+          </h4>
+        </div>
+
+        <div class="card-body">
+          <p class="fs-5">
+            أنت على وشك تصدير
+            <strong class="text-danger">{{ total_count|floatformat:"0" }}</strong>
+            وثيقة إلى ملف Excel.
+          </p>
+
+          <p class="text-muted">
+            الحد الآمن للتصدير هو
+            <strong>{{ threshold|floatformat:"0" }}</strong>
+            وثيقة. تجاوز هذا الحد قد يستغرق وقتاً طويلاً
+            أو يسبب مشاكل في الذاكرة.
+          </p>
+
+          <div class="alert alert-info">
+            <strong>ننصحك بـ:</strong>
+            <ul class="mb-0 mt-2">
+              <li>تضييق نطاق البحث (تاريخ، مصدر، مديرية...).</li>
+              <li>التصدير حسب المجلد بدلاً من التصدير الكامل.</li>
+            </ul>
+          </div>
+
+          <hr>
+
+          <div class="d-flex gap-2 justify-content-end">
+            <a href="{% url 'search' %}" class="btn btn-outline-secondary">
+              <i class="bi bi-arrow-right"></i>
+              رجوع للبحث
+            </a>
+
+            <a href="?{{ query_string }}&confirmed=1" class="btn btn-warning">
+              <i class="bi bi-file-earmark-excel"></i>
+              متابعة التصدير على أي حال
+            </a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -67,6 +67,12 @@
         <input type="text" id="id_destination_entity_name" name="destination_entity_name"
                value="{{ document.destination_entity_name|default:'' }}" placeholder="اكتب اسم الجهة المحولة إليها">
 
+        <!-- ✅✅✅ جديد: حالة الوثيقة ✅✅✅ -->
+        <label for="id_status">حالة الوثيقة <span style="display:inline-block; margin-right:6px; padding:2px 8px; font-size:10px; font-weight:600; color:#7b8794; background:#f1f3f2; border:1px solid #dce1df; border-radius:999px;">اختياري</span></label>
+        <input type="text" id="id_status" name="status" maxlength="100"
+               value="{{ document.status|default:'' }}"
+               placeholder="مثال: قيد المراجعة، تم الإنجاز، معلّقة...">
+
         <button type="submit" class="btn btn-primary btn-block">حفظ التعديلات</button>
         <a href="{% url 'document_detail' document.id %}" class="btn btn-secondary btn-block">إلغاء</a>
     </form>
